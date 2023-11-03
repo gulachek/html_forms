@@ -1,0 +1,6 @@
+[requires]
+catui/0.1.0
+msgstream/0.2.0
+
+[generators]
+PkgConfigDeps
