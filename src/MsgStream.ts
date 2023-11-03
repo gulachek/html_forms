@@ -1,6 +1,35 @@
-import { Socket } from 'node:net';
-import EventEmitter from 'node:events';
 import { AsyncReadStream } from './AsyncReadStream.js';
+import { Writable } from 'node:stream';
+
+export async function send(
+	stream: Writable,
+	buf: Uint8Array,
+	bufSize: number,
+): Promise<void> {
+	if (bufSize <= 0)
+		throw new Error(`Buf size (${bufSize}) must be greater than zero`);
+
+	await writeHeader(stream, bufSize, buf.length);
+	if (buf.length > 0) {
+		await write(stream, buf);
+	}
+}
+
+export async function recv(
+	stream: AsyncReadStream,
+	bufSize: number,
+): Promise<Uint8Array | null> {
+	if (bufSize <= 0)
+		throw new Error(`Buf size (${bufSize}) must be greater than zero`);
+
+	const msgSize = await readHeader(stream, bufSize);
+	if (msgSize === null) return null;
+
+	if (msgSize <= 0) return emptyBuffer;
+
+	const msg = await stream.readn(msgSize);
+	return msg;
+}
 
 async function readHeader(
 	stream: AsyncReadStream,
@@ -35,75 +64,44 @@ async function readHeader(
 
 const emptyBuffer = new Uint8Array(0);
 
-export async function recv(
-	stream: AsyncReadStream,
-	bufSize: number,
-): Promise<Uint8Array | null> {
-	if (bufSize <= 0)
-		throw new Error(`Buf size (${bufSize}) must be greater than zero`);
-
-	const msgSize = await readHeader(stream, bufSize);
-	if (msgSize === null) return null;
-
-	if (msgSize <= 0) return emptyBuffer;
-
-	const msg = await stream.readn(msgSize);
-	return msg;
+function write(stream: Writable, buf: Uint8Array): Promise<void> {
+	return new Promise<void>((res, rej) => {
+		stream.write(buf, (err) => {
+			if (err) rej(err);
+			else res();
+		});
+	});
 }
 
-export class MsgStreamSocket extends EventEmitter {
-	private _socket: Socket;
+async function writeHeader(
+	stream: Writable,
+	bufSize: number,
+	msgSize: number,
+): Promise<void> {
+	if (msgSize > bufSize)
+		throw new Error(
+			`Buffer size '${bufSize}' is not large enough to fit message of size '${msgSize}'`,
+		);
 
-	public constructor(sock: Socket) {
-		super();
-		this._socket = sock;
+	const nheader = headerSize(bufSize);
+	const buf = new Uint8Array(nheader);
+	if (nheader > 0xff) {
+		throw new Error(
+			`msgstream header size of '${nheader}' is too big. must fit in one byte`,
+		);
 	}
 
-	private async writeHeader(bufSize: number, msgSize: number): Promise<void> {
-		if (msgSize > bufSize)
-			throw new Error(
-				`Buffer size '${bufSize}' is not large enough to fit message of size '${msgSize}'`,
-			);
+	buf[0] = nheader;
 
-		const nheader = headerSize(bufSize);
-		const buf = new Uint8Array(nheader);
-		if (nheader > 0xff) {
-			throw new Error(
-				`msgstream header size of '${nheader}' is too big. must fit in one byte`,
-			);
-		}
-
-		buf[0] = nheader;
-
-		let i = 1;
-		while (msgSize > 0) {
-			const nextSize = Math.floor(msgSize / 256);
-			buf[i] = msgSize - nextSize;
-			msgSize = nextSize;
-			i += 1;
-		}
-
-		return this._write(buf);
+	let i = 1;
+	while (msgSize > 0) {
+		const nextSize = Math.floor(msgSize / 256);
+		buf[i] = msgSize - nextSize;
+		msgSize = nextSize;
+		i += 1;
 	}
 
-	private _write(buf: Uint8Array): Promise<void> {
-		return new Promise<void>((res, rej) => {
-			this._socket.write(buf, (err) => {
-				if (err) rej(err);
-				else res();
-			});
-		});
-	}
-
-	public async send(buf: Uint8Array, bufSize: number): Promise<void> {
-		if (bufSize <= 0)
-			throw new Error(`Buf size (${bufSize}) must be greater than zero`);
-
-		await this.writeHeader(bufSize, buf.length);
-		if (buf.length > 0) {
-			await this._write(buf);
-		}
-	}
+	return write(stream, buf);
 }
 
 function headerSize(bufSize: number): number {

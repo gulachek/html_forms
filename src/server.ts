@@ -1,7 +1,7 @@
 import { Socket } from 'node:net';
 import { AsyncReadStream } from './AsyncReadStream.js';
 import { CatuiServer } from './CatuiServer.js';
-import { MsgStreamSocket, recv } from './MsgStream.js';
+import { send, recv } from './MsgStream.js';
 import {
 	createServer,
 	IncomingMessage,
@@ -172,8 +172,7 @@ class HtmlSession {
 	public async submitForm(stream: Readable): Promise<void> {
 		const bufStream = new BufferStream();
 		await pipeline(stream, bufStream);
-		const msg = new MsgStreamSocket(this._sock);
-		await msg.send(bufStream.consume(), PROMPT_SIZE);
+		await send(this._sock, bufStream.consume(), PROMPT_SIZE);
 	}
 
 	private async uploadFile(obj: IUploadMessage) {

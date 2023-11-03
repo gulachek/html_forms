@@ -1,6 +1,6 @@
 import { join, dirname } from 'node:path';
 import { Socket } from 'node:net';
-import { MsgStreamSocket } from './MsgStream.js';
+import { send } from './MsgStream.js';
 import { Worker } from 'node:worker_threads';
 import { close } from 'node:fs';
 
@@ -83,13 +83,11 @@ const ACK_BUFSIZE = 1024;
 const emptyBuf = new Uint8Array(0);
 
 async function ack(sock: Socket): Promise<void> {
-	const msg = new MsgStreamSocket(sock);
-	await msg.send(emptyBuf, ACK_BUFSIZE);
+	await send(sock, emptyBuf, ACK_BUFSIZE);
 }
 
 async function nack(sock: Socket, errMsg: string): Promise<void> {
-	const msg = new MsgStreamSocket(sock);
 	const json = JSON.stringify({ error: errMsg });
 	const buf = Buffer.from(json, 'utf8');
-	await msg.send(buf, ACK_BUFSIZE);
+	await send(sock, buf, ACK_BUFSIZE);
 }
