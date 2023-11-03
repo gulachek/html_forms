@@ -23,6 +23,7 @@ export class CatuiServer {
 		const worker = new Worker(workerScript, { workerData: this._fd });
 		worker.on('message', async (fd: number) => {
 			const sock = new Socket({ fd });
+			sock.pause();
 
 			if (this._connectionCount >= 128) {
 				await nack(sock, 'Error: max connections');

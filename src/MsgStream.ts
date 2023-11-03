@@ -1,5 +1,5 @@
-import { AsyncReadStream } from './AsyncReadStream.js';
-import { Writable } from 'node:stream';
+import { Readable, Writable } from 'node:stream';
+import { readn } from './AsyncReadStream.js';
 
 export async function send(
 	stream: Writable,
@@ -16,9 +16,13 @@ export async function send(
 }
 
 export async function recv(
-	stream: AsyncReadStream,
+	stream: Readable,
 	bufSize: number,
 ): Promise<Uint8Array | null> {
+	if (!stream.isPaused()) {
+		throw new Error(`msgstream recv must operate on a paused stream`);
+	}
+
 	if (bufSize <= 0)
 		throw new Error(`Buf size (${bufSize}) must be greater than zero`);
 
@@ -27,12 +31,12 @@ export async function recv(
 
 	if (msgSize <= 0) return emptyBuffer;
 
-	const msg = await stream.readn(msgSize);
+	const msg = await readn(stream, msgSize);
 	return msg;
 }
 
 async function readHeader(
-	stream: AsyncReadStream,
+	stream: Readable,
 	bufSize: number,
 ): Promise<number | null> {
 	const nHeader = headerSize(bufSize);
@@ -41,7 +45,7 @@ async function readHeader(
 			`msgstream header size of '${nHeader}' is too big. must fit in one byte`,
 		);
 
-	const firstByte = await stream.readn(1);
+	const firstByte = await readn(stream, 1);
 	if (!firstByte) {
 		return null;
 	}
@@ -51,7 +55,7 @@ async function readHeader(
 			`Received unexpected msgstream header size. Expected '${nHeader}' but received '${firstByte[0]}'`,
 		);
 
-	const header = await stream.readn(nHeader - 1);
+	const header = await readn(stream, nHeader - 1);
 	let msgSize = 0;
 	let mult = 1;
 	for (let i = 0; i < header.length; ++i) {

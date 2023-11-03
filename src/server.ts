@@ -1,5 +1,5 @@
 import { Socket } from 'node:net';
-import { AsyncReadStream } from './AsyncReadStream.js';
+import { readn } from './AsyncReadStream.js';
 import { CatuiServer } from './CatuiServer.js';
 import { send, recv } from './MsgStream.js';
 import {
@@ -119,7 +119,6 @@ function isPrompt(obj: unknown): obj is IPromptMessage {
 
 class HtmlSession {
 	private _sock: Socket;
-	private _readStream: AsyncReadStream;
 	private _files = new Map<string, IFile>();
 	private _uuid: string;
 	private _baseUrl: string;
@@ -129,7 +128,6 @@ class HtmlSession {
 		this._sock = sock;
 		this._baseUrl = baseUrl;
 		this._uuid = uuid;
-		this._readStream = new AsyncReadStream(sock);
 	}
 
 	async start(): Promise<void> {
@@ -140,7 +138,7 @@ class HtmlSession {
 		});
 
 		while (connected) {
-			const msg = await recv(this._readStream, MSG_SIZE);
+			const msg = await recv(this._sock, MSG_SIZE);
 			if (msg === null) {
 				connected = false;
 				break;
@@ -177,7 +175,7 @@ class HtmlSession {
 
 	private async uploadFile(obj: IUploadMessage) {
 		console.log('Uploading file', obj.url);
-		const content = await this._readStream.readn(obj.size);
+		const content = await readn(this._sock, obj.size);
 		this._files.set(obj.url, {
 			url: obj.url,
 			mime: obj.mime,
