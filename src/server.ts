@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import EventEmitter from 'node:events';
+import { exec } from 'node:child_process';
 
 const MSG_SIZE = 2048;
 const PROMPT_SIZE = 4096;
@@ -184,7 +185,9 @@ class HtmlSession {
 	}
 
 	private promptUser(obj: IPromptMessage) {
-		console.log(`Prompting: ${this._baseUrl}${this._uuid}${obj.url}`);
+		const url = `${this._baseUrl}${this._uuid}${obj.url}`;
+		console.log(`Prompting: ${url}`);
+		exec(`open '${url}'`);
 	}
 }
 
