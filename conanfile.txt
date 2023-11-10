@@ -1,6 +1,8 @@
 [requires]
 catui/0.1.0
+catui-server/0.1.0
 msgstream/0.2.0
+boost/1.83.0
 
 [generators]
 PkgConfigDeps

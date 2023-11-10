@@ -18,7 +18,7 @@ cli((book, opts) => {
 	const gypMakefile = Path.build('Makefile');
 	const addon = Path.build('Release/addon.node');
 	const addonSrc = Path.src('src/catui_server.cc');
-	const tsc = Path.build('tsc');
+	//const tsc = Path.build('tsc');
 
 	book.add('all', [config, addon]);
 
@@ -28,9 +28,16 @@ cli((book, opts) => {
 		link: ['catui', 'msgstream'],
 	});
 
+	const cppServer = c.addExecutable({
+		name: 'server',
+		precompiledHeader: 'include/asio-pch.hpp',
+		src: ['src/server.cpp'],
+		link: ['catui-server'],
+	});
+
 	const cmds = c.addCompileCommands();
 
-	book.add('all', [client, cmds]);
+	book.add('all', [client, cppServer, cmds]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, server);
