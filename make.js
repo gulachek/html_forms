@@ -31,7 +31,7 @@ cli((book, opts) => {
 	const cppServer = c.addExecutable({
 		name: 'server',
 		precompiledHeader: 'include/asio-pch.hpp',
-		src: ['src/server.cpp'],
+		src: ['src/server.cpp', 'src/mime_type.cpp'],
 		link: ['catui-server'],
 	});
 
