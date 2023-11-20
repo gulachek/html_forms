@@ -13,295 +13,53 @@
 //
 //------------------------------------------------------------------------------
 #include "asio-pch.hpp"
-#include "mime_type.hpp"
+#include "async_msgstream.hpp"
+#include "http_listener.hpp"
 
-namespace beast = boost::beast;   // from <boost/beast.hpp>
-namespace http = beast::http;     // from <boost/beast/http.hpp>
-namespace net = boost::asio;      // from <boost/asio.hpp>
-using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
-
-// Return a reasonable mime type based on the extension of a file.
-// Append an HTTP rel-path to a local filesystem path.
-// The returned path is normalized for the platform.
-std::string path_cat(beast::string_view base, beast::string_view path) {
-  if (base.empty())
-    return std::string(path);
-  std::string result(base);
-#ifdef BOOST_MSVC
-  char constexpr path_separator = '\\';
-  if (result.back() == path_separator)
-    result.resize(result.size() - 1);
-  result.append(path.data(), path.size());
-  for (auto &c : result)
-    if (c == '/')
-      c = path_separator;
-#else
-  char constexpr path_separator = '/';
-  if (result.back() == path_separator)
-    result.resize(result.size() - 1);
-  result.append(path.data(), path.size());
-#endif
-  return result;
+extern "C" {
+#include <catui_server.h>
 }
 
-// Return a response for the given request.
-//
-// The concrete type of the response message (which depends on the
-// request), is type-erased in message_generator.
-template <class Body, class Allocator>
-http::message_generator
-handle_request(beast::string_view doc_root,
-               http::request<Body, http::basic_fields<Allocator>> &&req) {
-  // Returns a bad request response
-  auto const bad_request = [&req](beast::string_view why) {
-    http::response<http::string_body> res{http::status::bad_request,
-                                          req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, "text/html");
-    res.keep_alive(req.keep_alive());
-    res.body() = std::string(why);
-    res.prepare_payload();
-    return res;
-  };
+namespace asio = boost::asio;
+namespace beast = boost::beast;
+using asio::ip::tcp;
 
-  // Returns a not found response
-  auto const not_found = [&req](beast::string_view target) {
-    http::response<http::string_body> res{http::status::not_found,
-                                          req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, "text/html");
-    res.keep_alive(req.keep_alive());
-    res.body() = "The resource '" + std::string(target) + "' was not found.";
-    res.prepare_payload();
-    return res;
-  };
+typedef asio::posix::stream_descriptor catui_stream;
 
-  // Returns a server error response
-  auto const server_error = [&req](beast::string_view what) {
-    http::response<http::string_body> res{http::status::internal_server_error,
-                                          req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, "text/html");
-    res.keep_alive(req.keep_alive());
-    res.body() = "An error occurred: '" + std::string(what) + "'";
-    res.prepare_payload();
-    return res;
-  };
-
-  // Make sure we can handle the method
-  if (req.method() != http::verb::get && req.method() != http::verb::head)
-    return bad_request("Unknown HTTP-method");
-
-  // Request path must be absolute and not contain "..".
-  if (req.target().empty() || req.target()[0] != '/' ||
-      req.target().find("..") != beast::string_view::npos)
-    return bad_request("Illegal request-target");
-
-  // Build the path to the requested file
-  std::string path = path_cat(doc_root, req.target());
-  if (req.target().back() == '/')
-    path.append("index.html");
-
-  // Attempt to open the file
-  beast::error_code ec;
-  http::file_body::value_type body;
-  body.open(path.c_str(), beast::file_mode::scan, ec);
-
-  // Handle the case where the file doesn't exist
-  if (ec == beast::errc::no_such_file_or_directory)
-    return not_found(req.target());
-
-  // Handle an unknown error
-  if (ec)
-    return server_error(ec.message());
-
-  // Cache the size since we need it after the move
-  auto const size = body.size();
-
-  // Respond to HEAD request
-  if (req.method() == http::verb::head) {
-    http::response<http::empty_body> res{http::status::ok, req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, mime_type(path));
-    res.content_length(size);
-    res.keep_alive(req.keep_alive());
-    return res;
-  }
-
-  // Respond to GET request
-  http::response<http::file_body> res{
-      std::piecewise_construct, std::make_tuple(std::move(body)),
-      std::make_tuple(http::status::ok, req.version())};
-  res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-  res.set(http::field::content_type, mime_type(path));
-  res.content_length(size);
-  res.keep_alive(req.keep_alive());
-  return res;
-}
-
-//------------------------------------------------------------------------------
-
-// Report a failure
-void fail(beast::error_code ec, char const *what) {
-  std::cerr << what << ": " << ec.message() << "\n";
-}
-
-// Handles an HTTP server connection
-class session : public std::enable_shared_from_this<session> {
-  beast::tcp_stream stream_;
-  beast::flat_buffer buffer_;
-  std::shared_ptr<std::string const> doc_root_;
-  http::request<http::string_body> req_;
+class catui_connection : public std::enable_shared_from_this<catui_connection> {
+  catui_stream stream_;
+  std::array<std::uint8_t, CATUI_ACK_SIZE> ack_;
 
 public:
-  // Take ownership of the stream
-  session(tcp::socket &&socket,
-          std::shared_ptr<std::string const> const &doc_root)
-      : stream_(std::move(socket)), doc_root_(doc_root) {}
+  catui_connection(catui_stream &&stream) : stream_{std::move(stream)} {}
 
   // Start the asynchronous operation
   void run() {
-    // We need to be executing within a strand to perform async operations
-    // on the I/O objects in this session. Although not strictly necessary
-    // for single-threaded contexts, this example code is written to be
-    // thread-safe by default.
-    net::dispatch(
-        stream_.get_executor(),
-        beast::bind_front_handler(&session::do_read, shared_from_this()));
+    asio::dispatch(stream_.get_executor(),
+                   beast::bind_front_handler(&catui_connection::do_read,
+                                             shared_from_this()));
   }
 
   void do_read() {
-    // Make the request empty before reading,
-    // otherwise the operation behavior is undefined.
-    req_ = {};
+    using namespace std::placeholders;
 
-    // Set the timeout.
-    stream_.expires_after(std::chrono::seconds(30));
+    auto n = catui_server_encode_nack(ack_.data(), ack_.size(),
+                                      (char *)"Not implemented", nullptr);
+    std::cerr << "Encoded catui header with " << n << " bytes" << std::endl;
 
-    // Read a request
-    http::async_read(
-        stream_, buffer_, req_,
-        beast::bind_front_handler(&session::on_read, shared_from_this()));
+    auto cb = std::bind(&catui_connection::on_read, shared_from_this(), _1, _2);
+    async_msgstream_send(stream_, asio::buffer(ack_), n, cb);
   }
 
-  void on_read(beast::error_code ec, std::size_t bytes_transferred) {
-    boost::ignore_unused(bytes_transferred);
-
-    // This means they closed the connection
-    if (ec == http::error::end_of_stream)
-      return do_close();
-
-    if (ec)
-      return fail(ec, "read");
-
-    // Send the response
-    send_response(handle_request(*doc_root_, std::move(req_)));
-  }
-
-  void send_response(http::message_generator &&msg) {
-    bool keep_alive = msg.keep_alive();
-
-    // Write the response
-    beast::async_write(stream_, std::move(msg),
-                       beast::bind_front_handler(
-                           &session::on_write, shared_from_this(), keep_alive));
-  }
-
-  void on_write(bool keep_alive, beast::error_code ec,
-                std::size_t bytes_transferred) {
-    boost::ignore_unused(bytes_transferred);
-
-    if (ec)
-      return fail(ec, "write");
-
-    if (!keep_alive) {
-      // This means we should close the connection, usually because
-      // the response indicated the "Connection: close" semantic.
-      return do_close();
+  void on_read(std::error_condition ec, msgstream_size n) {
+    if (ec) {
+      std::cerr << "Error sending nack: " << ec.message() << std::endl;
+      return;
     }
 
-    // Read another request
-    do_read();
-  }
-
-  void do_close() {
-    // Send a TCP shutdown
-    beast::error_code ec;
-    stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
-
-    // At this point the connection is closed gracefully
+    std::cerr << "on_read" << std::endl;
   }
 };
-
-//------------------------------------------------------------------------------
-
-// Accepts incoming connections and launches the sessions
-class listener : public std::enable_shared_from_this<listener> {
-  net::io_context &ioc_;
-  tcp::acceptor acceptor_;
-  std::shared_ptr<std::string const> doc_root_;
-
-public:
-  listener(net::io_context &ioc, tcp::endpoint endpoint,
-           std::shared_ptr<std::string const> const &doc_root)
-      : ioc_(ioc), acceptor_(net::make_strand(ioc)), doc_root_(doc_root) {
-    beast::error_code ec;
-
-    // Open the acceptor
-    acceptor_.open(endpoint.protocol(), ec);
-    if (ec) {
-      fail(ec, "open");
-      return;
-    }
-
-    // Allow address reuse
-    acceptor_.set_option(net::socket_base::reuse_address(true), ec);
-    if (ec) {
-      fail(ec, "set_option");
-      return;
-    }
-
-    // Bind to the server address
-    acceptor_.bind(endpoint, ec);
-    if (ec) {
-      fail(ec, "bind");
-      return;
-    }
-
-    // Start listening for connections
-    acceptor_.listen(net::socket_base::max_listen_connections, ec);
-    if (ec) {
-      fail(ec, "listen");
-      return;
-    }
-  }
-
-  // Start accepting incoming connections
-  void run() { do_accept(); }
-
-private:
-  void do_accept() {
-    // The new connection gets its own strand
-    acceptor_.async_accept(
-        net::make_strand(ioc_),
-        beast::bind_front_handler(&listener::on_accept, shared_from_this()));
-  }
-
-  void on_accept(beast::error_code ec, tcp::socket socket) {
-    if (ec) {
-      fail(ec, "accept");
-      return; // To avoid infinite loop
-    } else {
-      // Create the session and run it
-      std::make_shared<session>(std::move(socket), doc_root_)->run();
-    }
-
-    // Accept another connection
-    do_accept();
-  }
-};
-
-//------------------------------------------------------------------------------
 
 int main(int argc, char *argv[]) {
   // Check command line arguments.
@@ -311,16 +69,38 @@ int main(int argc, char *argv[]) {
               << "    " << argv[0] << " 8080\n";
     return EXIT_FAILURE;
   }
-  auto const address = net::ip::make_address("127.0.0.1");
+  auto const address = asio::ip::make_address("127.0.0.1");
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
   auto const doc_root = std::make_shared<std::string>(".");
 
   // The io_context is required for all I/O
-  net::io_context ioc{};
+  asio::io_context ioc{};
 
   // Create and launch a listening port
-  std::make_shared<listener>(ioc, tcp::endpoint{address, port}, doc_root)
+  std::make_shared<http_listener>(ioc, tcp::endpoint{address, port}, doc_root)
       ->run();
+
+  auto lb = catui_server_fd(stderr);
+  if (!lb) {
+    return EXIT_FAILURE;
+  }
+
+  std::thread th{[&ioc, lb]() {
+    while (true) {
+      int client = catui_server_accept(lb, stderr);
+      if (client < 0) {
+        std::cerr << "Failed to accept catui client" << std::endl;
+        close(client);
+        break;
+      }
+
+      auto con = std::make_shared<catui_connection>(
+          catui_stream{asio::make_strand(ioc), client});
+
+      con->run();
+    }
+  }};
+  th.detach();
 
   ioc.run();
 

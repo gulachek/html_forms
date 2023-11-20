@@ -31,7 +31,7 @@ cli((book, opts) => {
 	const cppServer = c.addExecutable({
 		name: 'server',
 		precompiledHeader: 'include/asio-pch.hpp',
-		src: ['src/server.cpp', 'src/mime_type.cpp'],
+		src: ['src/server.cpp', 'src/mime_type.cpp', 'src/http_listener.cpp'],
 		link: ['catui-server'],
 	});
 
@@ -40,11 +40,11 @@ cli((book, opts) => {
 	book.add('all', [client, cppServer, cmds]);
 
 	book.add(config, async (args) => {
-		const [cfg, srv] = args.absAll(config, server);
+		const [cfg, srv] = args.absAll(config, cppServer);
 		await writeFile(
 			cfg,
 			JSON.stringify({
-				exec: ['/usr/local/bin/node', srv],
+				exec: [srv, '3838'],
 			}),
 			'utf8',
 		);
