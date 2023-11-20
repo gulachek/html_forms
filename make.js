@@ -22,17 +22,26 @@ cli((book, opts) => {
 
 	book.add('all', [config, addon]);
 
+	const htmlLib = c.addLibrary({
+		name: 'html-forms',
+		privateDefinitions: {
+			HTML_API: 'EXPORT',
+		},
+		src: ['src/html-forms.c'],
+		link: ['msgstream', 'cjson'],
+	});
+
 	const client = c.addExecutable({
 		name: 'client',
 		src: ['test/client.c'],
-		link: ['catui', 'msgstream'],
+		link: ['catui', 'msgstream', htmlLib],
 	});
 
 	const cppServer = c.addExecutable({
 		name: 'server',
 		precompiledHeader: 'include/asio-pch.hpp',
 		src: ['src/server.cpp', 'src/mime_type.cpp', 'src/http_listener.cpp'],
-		link: ['catui-server'],
+		link: ['catui-server', htmlLib],
 	});
 
 	const cmds = c.addCompileCommands();

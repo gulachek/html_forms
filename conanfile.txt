@@ -3,6 +3,7 @@ catui/0.1.1
 catui-server/0.1.1
 msgstream/0.2.1
 boost/1.83.0
+cjson/1.7.16
 
 [generators]
 PkgConfigDeps

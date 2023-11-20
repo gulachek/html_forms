@@ -14,6 +14,7 @@
 //------------------------------------------------------------------------------
 #include "asio-pch.hpp"
 #include "async_msgstream.hpp"
+#include "html-forms.h"
 #include "http_listener.hpp"
 
 extern "C" {
@@ -21,43 +22,83 @@ extern "C" {
 }
 
 namespace asio = boost::asio;
-namespace beast = boost::beast;
 using asio::ip::tcp;
 
 typedef asio::posix::stream_descriptor catui_stream;
 
 class catui_connection : public std::enable_shared_from_this<catui_connection> {
+  using self = catui_connection;
+
   catui_stream stream_;
   std::array<std::uint8_t, CATUI_ACK_SIZE> ack_;
+  std::array<std::uint8_t, HTML_MSG_SIZE> html_buf_;
+
+  template <typename... FnArgs>
+  auto bind(void (catui_connection::*fn)(FnArgs...)) {
+    return std::bind_front(fn, shared_from_this());
+  }
 
 public:
   catui_connection(catui_stream &&stream) : stream_{std::move(stream)} {}
 
   // Start the asynchronous operation
-  void run() {
-    asio::dispatch(stream_.get_executor(),
-                   beast::bind_front_handler(&catui_connection::do_read,
-                                             shared_from_this()));
+  void run() { asio::dispatch(stream_.get_executor(), bind(&self::do_ack)); }
+
+private:
+  void do_ack() {
+    auto n = catui_server_encode_ack(ack_.data(), ack_.size(), stderr);
+    if (n < 0)
+      return;
+
+    async_msgstream_send(stream_, asio::buffer(ack_), n, bind(&self::on_ack));
   }
 
-  void do_read() {
-    using namespace std::placeholders;
-
-    auto n = catui_server_encode_nack(ack_.data(), ack_.size(),
-                                      (char *)"Not implemented", nullptr);
-    std::cerr << "Encoded catui header with " << n << " bytes" << std::endl;
-
-    auto cb = std::bind(&catui_connection::on_read, shared_from_this(), _1, _2);
-    async_msgstream_send(stream_, asio::buffer(ack_), n, cb);
-  }
-
-  void on_read(std::error_condition ec, msgstream_size n) {
+  void on_ack(std::error_condition ec, msgstream_size n) {
     if (ec) {
-      std::cerr << "Error sending nack: " << ec.message() << std::endl;
+      std::cerr << "Error sending ack: " << ec.message() << std::endl;
       return;
     }
 
-    std::cerr << "on_read" << std::endl;
+    do_recv();
+  }
+
+  void do_recv() {
+    async_msgstream_recv(stream_, asio::buffer(html_buf_),
+                         bind(&self::on_recv));
+    return;
+    auto n = msgstream_recv(stream_.native_handle(), html_buf_.data(),
+                            html_buf_.size(), stderr);
+    if (n < 0) {
+      return;
+    }
+
+    on_recv(std::error_condition{}, n);
+  }
+
+  void on_recv(std::error_condition ec, msgstream_size n) {
+    if (ec) {
+      std::cerr << "Error receiving html message: " << ec.message()
+                << std::endl;
+      return;
+    }
+
+    struct html_msg msg;
+    if (!html_decode_msg(html_buf_.data(), n, &msg)) {
+      std::cerr << "Error decoding html message" << std::endl;
+      return;
+    }
+
+    switch (msg.type) {
+    case HTML_BEGIN_UPLOAD:
+      std::cerr << "Received upload message" << std::endl;
+      break;
+    case HTML_PROMPT:
+      std::cerr << "Received prompt message" << std::endl;
+      break;
+    default:
+      std::cerr << "Invalid message type: " << msg.type << std::endl;
+      break;
+    }
   }
 };
 

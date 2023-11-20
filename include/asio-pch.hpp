@@ -5,6 +5,7 @@
 #include <boost/asio/compose.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
+#include <boost/asio/read.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
