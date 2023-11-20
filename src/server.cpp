@@ -14,6 +14,7 @@
 //------------------------------------------------------------------------------
 #include "asio-pch.hpp"
 #include "async_msgstream.hpp"
+#include "catui.h"
 #include "html-forms.h"
 #include "http_listener.hpp"
 
@@ -26,12 +27,17 @@ using asio::ip::tcp;
 
 typedef asio::posix::stream_descriptor catui_stream;
 
+struct upload_file {
+  std::vector<std::uint8_t> contents;
+  std::string mime_type;
+};
+
 class catui_connection : public std::enable_shared_from_this<catui_connection> {
   using self = catui_connection;
 
   catui_stream stream_;
-  std::array<std::uint8_t, CATUI_ACK_SIZE> ack_;
-  std::array<std::uint8_t, HTML_MSG_SIZE> html_buf_;
+  std::vector<std::uint8_t> buf_;
+  std::map<std::string, upload_file> uploads_;
 
   template <typename... FnArgs>
   auto bind(void (catui_connection::*fn)(FnArgs...)) {
@@ -46,11 +52,12 @@ public:
 
 private:
   void do_ack() {
-    auto n = catui_server_encode_ack(ack_.data(), ack_.size(), stderr);
+    buf_.resize(CATUI_ACK_SIZE);
+    auto n = catui_server_encode_ack(buf_.data(), buf_.size(), stderr);
     if (n < 0)
       return;
 
-    async_msgstream_send(stream_, asio::buffer(ack_), n, bind(&self::on_ack));
+    async_msgstream_send(stream_, asio::buffer(buf_), n, bind(&self::on_ack));
   }
 
   void on_ack(std::error_condition ec, msgstream_size n) {
@@ -59,20 +66,12 @@ private:
       return;
     }
 
+    buf_.resize(HTML_MSG_SIZE);
     do_recv();
   }
 
   void do_recv() {
-    async_msgstream_recv(stream_, asio::buffer(html_buf_),
-                         bind(&self::on_recv));
-    return;
-    auto n = msgstream_recv(stream_.native_handle(), html_buf_.data(),
-                            html_buf_.size(), stderr);
-    if (n < 0) {
-      return;
-    }
-
-    on_recv(std::error_condition{}, n);
+    async_msgstream_recv(stream_, asio::buffer(buf_), bind(&self::on_recv));
   }
 
   void on_recv(std::error_condition ec, msgstream_size n) {
@@ -83,7 +82,7 @@ private:
     }
 
     struct html_msg msg;
-    if (!html_decode_msg(html_buf_.data(), n, &msg)) {
+    if (!html_decode_msg(buf_.data(), n, &msg)) {
       std::cerr << "Error decoding html message" << std::endl;
       return;
     }
@@ -91,14 +90,39 @@ private:
     switch (msg.type) {
     case HTML_BEGIN_UPLOAD:
       std::cerr << "Received upload message" << std::endl;
+      do_read_upload(msg.msg.upload);
       break;
     case HTML_PROMPT:
       std::cerr << "Received prompt message" << std::endl;
+      do_prompt(msg.msg.prompt);
       break;
     default:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
     }
+  }
+
+  void do_read_upload(const begin_upload &msg) {
+    auto &upload = uploads_[msg.url];
+    upload.mime_type = msg.mime_type;
+    upload.contents.resize(msg.content_length);
+    async_read(stream_, asio::buffer(upload.contents),
+               asio::transfer_exactly(msg.content_length),
+               bind(&self::on_read_upload));
+  }
+
+  void on_read_upload(std::error_code ec, std::size_t n) {
+    if (ec) {
+      std::cerr << "Error reading upload: " << ec.message() << std::endl;
+      return;
+    }
+
+    do_recv();
+  }
+
+  void do_prompt(const prompt &msg) {
+    std::cerr << "Prompting: " << msg.url << std::endl;
+    do_recv();
   }
 };
 
