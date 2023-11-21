@@ -4,8 +4,14 @@
 #include "asio-pch.hpp"
 #include <memory>
 
+using string_response =
+    boost::beast::http::response<boost::beast::http::string_body>;
+using string_request =
+    boost::beast::http::request<boost::beast::http::string_body>;
+
 struct http_session {
   virtual ~http_session() {}
+  virtual string_response respond(string_request &&req) = 0;
 };
 
 // Accepts incoming connections and launches the sessions

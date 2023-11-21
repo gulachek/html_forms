@@ -23,6 +23,7 @@ extern "C" {
 }
 
 namespace asio = boost::asio;
+namespace http = boost::beast::http;
 using asio::ip::tcp;
 
 typedef asio::posix::stream_descriptor catui_stream;
@@ -50,14 +51,20 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
 public:
   catui_connection(catui_stream &&stream,
                    const std::shared_ptr<http_listener> &http)
-      : stream_{std::move(stream)}, http_{http} {
-    session_id_ = http_->add_session(weak_from_this());
+      : stream_{std::move(stream)}, http_{http} {}
+
+  ~catui_connection() {
+    http_->remove_session(session_id_);
+    std::cerr << "Removed session " << session_id_ << std::endl;
   }
 
-  ~catui_connection() { http_->remove_session(session_id_); }
-
   // Start the asynchronous operation
-  void run() { asio::dispatch(stream_.get_executor(), bind(&self::do_ack)); }
+  void run() {
+    // TODO - thread safety on http_ ptr
+    session_id_ = http_->add_session(weak_from_this());
+    std::cerr << "Added session " << session_id_ << std::endl;
+    asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
+  }
 
 private:
   void do_ack() {
@@ -107,6 +114,18 @@ private:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
     }
+  }
+
+  string_response respond(string_request &&req) override {
+    string_response res{http::status::ok, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.set(http::field::content_type, "text/plain");
+    res.keep_alive(req.keep_alive());
+    res.body() = std::string("Hello");
+    res.prepare_payload();
+
+    // Send the response
+    return res;
   }
 
   void do_read_upload(const begin_upload &msg) {

@@ -1,5 +1,7 @@
 #include "http_listener.hpp"
+#include "html-forms.h"
 #include "mime_type.hpp"
+#include <complex>
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
@@ -179,77 +181,33 @@ public:
     if (ec)
       return fail(ec, "read");
 
-    auto target = req_.target();
-    std::vector<std::string_view> pieces;
+    std::string target{req_.target()};
+    char session_id[128], normalized_target[256];
+    int found =
+        html_parse_target(target.c_str(), session_id, sizeof(session_id),
+                          normalized_target, sizeof(normalized_target));
 
-    // find pieces
-    for (int start = 0, end = 0; end < target.length(); ++end) {
-      if (target[end] == '/') {
-        if (end > start) {
-          auto startp = target.data() + start;
-          pieces.emplace_back(startp, end - start);
-        }
+    if (!found)
+      return respond404("Target path not parsed");
 
-        start = end + 1;
-      }
+    auto it = sessions_.find(session_id);
+    if (it == sessions_.end())
+      return respond404("No session");
+
+    if (auto session_ptr = it->second.lock()) {
+      send_response(session_ptr->respond(std::move(req_)));
+    } else {
+      return respond404("Session expired");
     }
+  }
 
-    if (pieces.size() < 1) {
-      // 404
-      return;
-    }
-
-    auto sesh = sessions_.find(std::string{pieces.front()});
-    if (sesh == sessions_.end()) {
-      // 404
-      return;
-    }
-
-    std::vector<std::string_view> normalized_pieces;
-    normalized_pieces.reserve(pieces.size());
-    for (int i = 1; i < pieces.size(); ++i) {
-      const auto &piece = pieces[i];
-
-      if (piece == ".") {
-        continue;
-      }
-
-      if (piece == "..") {
-        normalized_pieces.pop_back();
-        continue;
-      }
-
-      if (piece.starts_with('~')) {
-        if (piece.size() == 1) {
-          normalized_pieces.clear();
-        } else {
-          throw std::runtime_error{"~ path not implemented"};
-        }
-
-        continue;
-      }
-
-      normalized_pieces.push_back(piece);
-    }
-
-    std::ostringstream url_os;
-    for (const auto &piece : normalized_pieces) {
-      url_os << '/' << piece;
-    }
-
-    if (target.ends_with('/')) {
-      url_os << "/index.html";
-    }
-
-    auto url = url_os.str();
-    std::cerr << "Requesting url at " << url << std::endl;
-
-    http::response<http::string_body> res{http::status::bad_request,
+  void respond404(const char *msg) {
+    http::response<http::string_body> res{http::status::not_found,
                                           req_.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, "text/html");
+    res.set(http::field::content_type, "text/plain");
     res.keep_alive(req_.keep_alive());
-    res.body() = std::string("Just becuz");
+    res.body() = std::string(msg);
     res.prepare_payload();
 
     // Send the response
