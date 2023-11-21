@@ -36,3 +36,8 @@ BOOST_FIXTURE_TEST_CASE(AppendsIndexToDir, f) {
 BOOST_FIXTURE_TEST_CASE(MultipleSlashesAreNormalized, f) {
   test("///sid//foo/////bar.txt", "sid", "/foo/bar.txt");
 }
+
+BOOST_FIXTURE_TEST_CASE(CurrentDirectoryNormalizedOut, f) {
+  test("/sid/././foo/././././bar.txt", "sid", "/foo/bar.txt");
+  test("/sid/././foo/./././.", "sid", "/foo/index.html");
+}

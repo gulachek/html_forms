@@ -110,6 +110,22 @@ fail:
   return 0;
 }
 
+static int parse_dot_file(const char *target, size_t n, int offset,
+                          int *dot_len, int *only_dots) {
+  *dot_len = 0;
+  *only_dots = 1;
+  int i = offset;
+  for (; i < n && target[i] != '/'; ++i) {
+    if (target[i] == '.') {
+      *dot_len += 1;
+    } else {
+      *only_dots = 0;
+    }
+  }
+
+  return i;
+}
+
 int html_parse_target(const char *target, char *session_id,
                       size_t session_id_len, char *normalized_path,
                       size_t norm_path_len) {
@@ -142,17 +158,31 @@ int html_parse_target(const char *target, char *session_id,
   // normalize path ...
   int norm_path_n = 0;
   while (i < n) {
-    if (norm_path_n >= session_id_len - 1)
+    // deal with '.+' directories
+    if (target[i] == '.' && target[i - 1] == '/') {
+      int dot_len, only_dots;
+      i = parse_dot_file(target, n, i, &dot_len, &only_dots);
+
+      if (!only_dots)
+        return 0; // hidden files not found
+
+      if (dot_len == 1) {
+        continue;
+      } else {
+        return 0; // not handled
+      }
+    }
+
+    if (norm_path_n >= norm_path_len - 1)
       return 0;
 
-    normalized_path[norm_path_n++] = target[i];
-
-    if (target[i] == '/') {
-      while (target[i] == '/' && i < n)
-        ++i;
-    } else {
-      ++i;
+    // ignore multiple '/'
+    if (!(target[i] == '/' && norm_path_n > 0 &&
+          normalized_path[norm_path_n - 1] == '/')) {
+      normalized_path[norm_path_n++] = target[i];
     }
+
+    ++i;
   }
 
   if (norm_path_n < 1) {
