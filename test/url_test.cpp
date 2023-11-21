@@ -66,3 +66,20 @@ BOOST_FIXTURE_TEST_CASE(MoreDotsInFileNameNotFound, f) {
   BOOST_TEST(!parse("/sid/.../"));
   BOOST_TEST(!parse("/sid/foo/..../../"));
 }
+
+BOOST_FIXTURE_TEST_CASE(VirtualAbsolutePath, f) {
+  test("/sid/~", "sid", "/index.html");
+  test("/sid/~/", "sid", "/index.html");
+  test("/sid/foo/~/bar.txt", "sid", "/bar.txt");
+  test("/sid/foo/bar/baz/~/qux.txt", "sid", "/qux.txt");
+  test("/sid/foo/bar/~/baz/~/qux.txt", "sid", "/qux.txt");
+}
+
+BOOST_FIXTURE_TEST_CASE(TildeMisuseNotFound, f) {
+  BOOST_TEST(!parse("/sid/foo~/bar.txt"));
+  BOOST_TEST(!parse("/sid/foo~baz/bar.txt"));
+  BOOST_TEST(!parse("/sid/~baz/bar.txt"));
+  BOOST_TEST(!parse("/sid/foo~"));
+  BOOST_TEST(!parse("/sid/foo~baz"));
+  BOOST_TEST(!parse("/sid/~baz"));
+}

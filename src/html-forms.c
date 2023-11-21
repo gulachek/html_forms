@@ -167,6 +167,20 @@ int html_parse_target(const char *target, char *session_id,
   // normalize path ...
   int norm_path_n = 0;
   while (i < n) {
+    // virtual abs path
+    if (target[i] == '~') {
+      if (target[i - 1] == '/')
+        norm_path_n = 1;
+      else
+        return 0;
+
+      if ((i + 1) < n && target[i + 1] != '/')
+        return 0;
+
+      ++i;
+      continue;
+    }
+
     // deal with '.+' directories
     if (target[i] == '.' && target[i - 1] == '/') {
       int dot_len, only_dots;
