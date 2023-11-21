@@ -167,6 +167,15 @@ int html_parse_target(const char *target, char *session_id,
   // normalize path ...
   int norm_path_n = 0;
   while (i < n) {
+    switch (target[i]) {
+    case '@':
+    case '%':
+    case '+':
+      return 0;
+    default:
+      break;
+    }
+
     // virtual abs path
     if (target[i] == '~') {
       if (target[i - 1] == '/')

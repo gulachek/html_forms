@@ -83,3 +83,16 @@ BOOST_FIXTURE_TEST_CASE(TildeMisuseNotFound, f) {
   BOOST_TEST(!parse("/sid/foo~baz"));
   BOOST_TEST(!parse("/sid/~baz"));
 }
+
+BOOST_FIXTURE_TEST_CASE(SpecialCharsInSessionIdOk, f) {
+  test("/sid~~123/foo/bar.txt", "sid~~123", "/foo/bar.txt");
+  test("/sid~/hello/", "sid~", "/hello/index.html");
+  test("/..sid./foo/~/bar.txt", "..sid.", "/bar.txt");
+  test("...sid/foo/bar/baz/~/qux.txt", "...sid", "/qux.txt");
+}
+
+BOOST_FIXTURE_TEST_CASE(ReservedCharsNotFound, f) {
+  BOOST_TEST(!parse("/sid/bar%20.txt")); // TODO support escape
+  BOOST_TEST(!parse("/sid/bar+.txt"));   // TODO support escape
+  BOOST_TEST(!parse("/sid/bar/hello@ampersand/bar.txt"));
+}
