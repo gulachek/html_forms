@@ -141,11 +141,18 @@ int html_parse_target(const char *target, char *session_id,
 
   // normalize path ...
   int norm_path_n = 0;
-  for (; i < n; ++i) {
+  while (i < n) {
     if (norm_path_n >= session_id_len - 1)
       return 0;
 
     normalized_path[norm_path_n++] = target[i];
+
+    if (target[i] == '/') {
+      while (target[i] == '/' && i < n)
+        ++i;
+    } else {
+      ++i;
+    }
   }
 
   if (norm_path_n < 1) {

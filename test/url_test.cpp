@@ -22,10 +22,17 @@ struct f {
 
 BOOST_FIXTURE_TEST_CASE(RootDirNotFound, f) { BOOST_TEST(!parse("/")); }
 
-BOOST_FIXTURE_TEST_CASE(SessionIdIsFirstPart, f) {
-  test("/session_id/", "session_id", "/index.html");
+BOOST_FIXTURE_TEST_CASE(BasicCaseSessionIdAndTarget, f) {
+  test("/sid/foo/bar.txt", "sid", "/foo/bar.txt");
 }
 
-BOOST_FIXTURE_TEST_CASE(NormalizedPathIsSecondPart, f) {
-  test("/sid/foo/bar.txt", "sid", "/foo/bar.txt");
+BOOST_FIXTURE_TEST_CASE(AppendsIndexToDir, f) {
+  test("/session_id/", "session_id", "/index.html");
+  test("/session_id", "session_id", "/index.html");
+  test("/session_id/bar/", "session_id", "/bar/index.html");
+  test("/session_id/bar", "session_id", "/bar");
+}
+
+BOOST_FIXTURE_TEST_CASE(MultipleSlashesAreNormalized, f) {
+  test("///sid//foo/////bar.txt", "sid", "/foo/bar.txt");
 }
