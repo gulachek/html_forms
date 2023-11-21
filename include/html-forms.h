@@ -44,6 +44,10 @@ int HTML_API html_encode_prompt(const char *url);
 int HTML_API html_decode_msg(const void *data, size_t size,
                              struct html_msg *msg);
 
+int HTML_API html_parse_target(const char *target, char *session_id,
+                               size_t session_id_len, char *normalized_path,
+                               size_t norm_path_len);
+
 #ifdef __cplusplus
 }
 #endif

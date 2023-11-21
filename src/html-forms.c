@@ -109,3 +109,38 @@ fail:
   cJSON_Delete(obj);
   return 0;
 }
+
+int html_parse_target(const char *target, char *session_id,
+                      size_t session_id_len, char *normalized_path,
+                      size_t norm_path_len) {
+  int n = strlen(target);
+
+  // find session id (first non-empty piece of target)
+  int start = 0, i = 0, session_id_n = 0;
+  for (; i < n; ++i) {
+    if (target[i] == '/') {
+      if (session_id_n)
+        break; // done
+    } else {
+      if (session_id_n >= session_id_len - 1) {
+        return 0; // can't fit session id
+      } else {
+        session_id[session_id_n++] = target[i];
+      }
+    }
+  }
+
+  // session id not found
+  if (session_id_n < 1)
+    return 0;
+
+  session_id[session_id_n] = '\0';
+
+  // normalize path ...
+
+  size_t norm_path_n = strlcpy(normalized_path, "/index.html", norm_path_len);
+  if (norm_path_n > norm_path_len)
+    return 0;
+
+  return 1;
+}

@@ -44,9 +44,20 @@ cli((book, opts) => {
 		link: ['catui-server', htmlLib],
 	});
 
+	const urlTest = c.addExecutable({
+		name: 'url_test',
+		src: ['test/url_test.cpp'],
+		link: ['boost-unit_test_framework', htmlLib],
+	});
+
+	const test = Path.build('test');
+	book.add(test, [urlTest], (args) => {
+		return args.spawn(args.abs(urlTest));
+	});
+
 	const cmds = c.addCompileCommands();
 
-	book.add('all', [client, cppServer, cmds]);
+	book.add('all', [client, cppServer, cmds, test]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, cppServer);
