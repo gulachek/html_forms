@@ -126,6 +126,15 @@ static int parse_dot_file(const char *target, size_t n, int offset,
   return i;
 }
 
+static int rfind(const char *str, int offset, char search) {
+  for (int i = offset; i >= 0; --i) {
+    if (str[i] == search)
+      return i;
+  }
+
+  return -1;
+}
+
 int html_parse_target(const char *target, char *session_id,
                       size_t session_id_len, char *normalized_path,
                       size_t norm_path_len) {
@@ -167,6 +176,13 @@ int html_parse_target(const char *target, char *session_id,
         return 0; // hidden files not found
 
       if (dot_len == 1) {
+        continue;
+      } else if (dot_len == 2) {
+        int current_dir_i = rfind(normalized_path, norm_path_n - 1, '/');
+        int parent_dir_i = rfind(normalized_path, current_dir_i - 1, '/');
+        if (parent_dir_i >= 0)
+          norm_path_n = parent_dir_i + 1;
+
         continue;
       } else {
         return 0; // not handled
