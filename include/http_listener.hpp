@@ -11,7 +11,8 @@ using string_request =
 
 struct http_session {
   virtual ~http_session() {}
-  virtual string_response respond(string_request &&req) = 0;
+  virtual string_response respond(const std::string_view &target,
+                                  string_request &&req) = 0;
 };
 
 // Accepts incoming connections and launches the sessions

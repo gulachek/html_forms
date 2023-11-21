@@ -53,16 +53,12 @@ public:
                    const std::shared_ptr<http_listener> &http)
       : stream_{std::move(stream)}, http_{http} {}
 
-  ~catui_connection() {
-    http_->remove_session(session_id_);
-    std::cerr << "Removed session " << session_id_ << std::endl;
-  }
+  ~catui_connection() { http_->remove_session(session_id_); }
 
   // Start the asynchronous operation
   void run() {
     // TODO - thread safety on http_ ptr
     session_id_ = http_->add_session(weak_from_this());
-    std::cerr << "Added session " << session_id_ << std::endl;
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
   }
 
@@ -116,15 +112,30 @@ private:
     }
   }
 
-  string_response respond(string_request &&req) override {
+  string_response respond(const std::string_view &target,
+                          string_request &&req) override {
     string_response res{http::status::ok, req.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, "text/plain");
     res.keep_alive(req.keep_alive());
-    res.body() = std::string("Hello");
+
+    auto upload_it = uploads_.find(std::string{target});
+    if (upload_it == uploads_.end())
+      return respond404(res);
+
+    const auto &upload = upload_it->second;
+
+    res.set(http::field::content_type, upload.mime_type);
+    res.body() = std::string{upload.contents.begin(), upload.contents.end()};
     res.prepare_payload();
 
     // Send the response
+    return res;
+  }
+
+  string_response respond404(string_response &res) {
+    res.set(http::field::content_type, "text/plain");
+    res.body() = std::string("Not found");
+    res.prepare_payload();
     return res;
   }
 

@@ -195,7 +195,7 @@ public:
       return respond404("No session");
 
     if (auto session_ptr = it->second.lock()) {
-      send_response(session_ptr->respond(std::move(req_)));
+      send_response(session_ptr->respond(normalized_target, std::move(req_)));
     } else {
       return respond404("Session expired");
     }
