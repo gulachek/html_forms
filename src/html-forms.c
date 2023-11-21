@@ -115,6 +115,9 @@ int html_parse_target(const char *target, char *session_id,
                       size_t norm_path_len) {
   int n = strlen(target);
 
+  if (session_id_len < 1 || norm_path_len < 1)
+    return 0; // not useful at all
+
   // find session id (first non-empty piece of target)
   int start = 0, i = 0, session_id_n = 0;
   for (; i < n; ++i) {
@@ -137,10 +140,29 @@ int html_parse_target(const char *target, char *session_id,
   session_id[session_id_n] = '\0';
 
   // normalize path ...
+  int norm_path_n = 0;
+  for (; i < n; ++i) {
+    if (norm_path_n >= session_id_len - 1)
+      return 0;
 
-  size_t norm_path_n = strlcpy(normalized_path, "/index.html", norm_path_len);
-  if (norm_path_n > norm_path_len)
-    return 0;
+    normalized_path[norm_path_n++] = target[i];
+  }
 
+  if (norm_path_n < 1) {
+    normalized_path[0] = '/';
+    norm_path_n = 1;
+  }
+
+  if (normalized_path[norm_path_n - 1] == '/') {
+    size_t remaining = norm_path_len - norm_path_n;
+    size_t index_n =
+        strlcpy(normalized_path + norm_path_n, "index.html", remaining);
+    if (index_n > remaining)
+      return 0; // couldn't fit
+
+    norm_path_n += index_n;
+  }
+
+  normalized_path[norm_path_n] = '\0';
   return 1;
 }
