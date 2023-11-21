@@ -7,6 +7,8 @@ namespace net = boost::asio;      // from <boost/asio.hpp>
 namespace asio = boost::asio;     // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 
+using session_map = std::map<std::string, std::weak_ptr<http_session>>;
+
 // Return a reasonable mime type based on the extension of a file.
 // Append an HTTP rel-path to a local filesystem path.
 // The returned path is normalized for the platform.
@@ -37,8 +39,7 @@ std::string path_cat(beast::string_view base, beast::string_view path) {
 // request), is type-erased in message_generator.
 template <class Body, class Allocator>
 http::message_generator
-handle_request(beast::string_view doc_root,
-               http::request<Body, http::basic_fields<Allocator>> &&req) {
+handle_request(http::request<Body, http::basic_fields<Allocator>> &&req) {
   // Returns a bad request response
   auto const bad_request = [&req](beast::string_view why) {
     http::response<http::string_body> res{http::status::bad_request,
@@ -85,7 +86,7 @@ handle_request(beast::string_view doc_root,
     return bad_request("Illegal request-target");
 
   // Build the path to the requested file
-  std::string path = path_cat(doc_root, req.target());
+  std::string path = req.target();
   if (req.target().back() == '/')
     path.append("index.html");
 
@@ -135,14 +136,13 @@ void fail(beast::error_code ec, char const *what) {
 class session : public std::enable_shared_from_this<session> {
   beast::tcp_stream stream_;
   beast::flat_buffer buffer_;
-  std::shared_ptr<std::string const> doc_root_;
   http::request<http::string_body> req_;
+  const session_map &sessions_;
 
 public:
   // Take ownership of the stream
-  session(tcp::socket &&socket,
-          std::shared_ptr<std::string const> const &doc_root)
-      : stream_(std::move(socket)), doc_root_(doc_root) {}
+  session(tcp::socket &&socket, const session_map &sessions)
+      : stream_(std::move(socket)), sessions_{sessions} {}
 
   // Start the asynchronous operation
   void run() {
@@ -179,8 +179,81 @@ public:
     if (ec)
       return fail(ec, "read");
 
+    auto target = req_.target();
+    std::vector<std::string_view> pieces;
+
+    // find pieces
+    for (int start = 0, end = 0; end < target.length(); ++end) {
+      if (target[end] == '/') {
+        if (end > start) {
+          auto startp = target.data() + start;
+          pieces.emplace_back(startp, end - start);
+        }
+
+        start = end + 1;
+      }
+    }
+
+    if (pieces.size() < 1) {
+      // 404
+      return;
+    }
+
+    auto sesh = sessions_.find(std::string{pieces.front()});
+    if (sesh == sessions_.end()) {
+      // 404
+      return;
+    }
+
+    std::vector<std::string_view> normalized_pieces;
+    normalized_pieces.reserve(pieces.size());
+    for (int i = 1; i < pieces.size(); ++i) {
+      const auto &piece = pieces[i];
+
+      if (piece == ".") {
+        continue;
+      }
+
+      if (piece == "..") {
+        normalized_pieces.pop_back();
+        continue;
+      }
+
+      if (piece.starts_with('~')) {
+        if (piece.size() == 1) {
+          normalized_pieces.clear();
+        } else {
+          throw std::runtime_error{"~ path not implemented"};
+        }
+
+        continue;
+      }
+
+      normalized_pieces.push_back(piece);
+    }
+
+    std::ostringstream url_os;
+    for (const auto &piece : normalized_pieces) {
+      url_os << '/' << piece;
+    }
+
+    if (target.ends_with('/')) {
+      url_os << "/index.html";
+    }
+
+    auto url = url_os.str();
+    std::cerr << "Requesting url at " << url << std::endl;
+
+    http::response<http::string_body> res{http::status::bad_request,
+                                          req_.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.set(http::field::content_type, "text/html");
+    res.keep_alive(req_.keep_alive());
+    res.body() = std::string("Just becuz");
+    res.prepare_payload();
+
     // Send the response
-    send_response(handle_request(*doc_root_, std::move(req_)));
+    send_response(std::move(res));
   }
 
   void send_response(http::message_generator &&msg) {
@@ -218,9 +291,8 @@ public:
   }
 };
 
-http_listener::http_listener(asio::io_context &ioc, tcp::endpoint endpoint,
-                             std::shared_ptr<std::string const> const &doc_root)
-    : ioc_(ioc), acceptor_(asio::make_strand(ioc)), doc_root_(doc_root) {
+http_listener::http_listener(asio::io_context &ioc, tcp::endpoint endpoint)
+    : ioc_(ioc), acceptor_(asio::make_strand(ioc)) {
   beast::error_code ec;
 
   // Open the acceptor
@@ -255,6 +327,15 @@ http_listener::http_listener(asio::io_context &ioc, tcp::endpoint endpoint,
 // Start accepting incoming connections
 void http_listener::run() { do_accept(); }
 
+std::string http_listener::add_session(std::weak_ptr<http_session> session) {
+  auto it = sessions_.emplace(std::make_pair("test", session));
+  return it.first->first;
+}
+
+void http_listener::remove_session(const std::string &session_id) {
+  sessions_.erase(session_id);
+}
+
 void http_listener::do_accept() {
   // The new connection gets its own strand
   acceptor_.async_accept(
@@ -268,7 +349,7 @@ void http_listener::on_accept(beast::error_code ec, tcp::socket socket) {
     return; // To avoid infinite loop
   } else {
     // Create the session and run it
-    std::make_shared<session>(std::move(socket), doc_root_)->run();
+    std::make_shared<session>(std::move(socket), sessions_)->run();
   }
 
   // Accept another connection

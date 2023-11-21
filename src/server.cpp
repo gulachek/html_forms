@@ -32,12 +32,15 @@ struct upload_file {
   std::string mime_type;
 };
 
-class catui_connection : public std::enable_shared_from_this<catui_connection> {
+class catui_connection : public std::enable_shared_from_this<catui_connection>,
+                         public http_session {
   using self = catui_connection;
 
   catui_stream stream_;
   std::vector<std::uint8_t> buf_;
   std::map<std::string, upload_file> uploads_;
+  std::shared_ptr<http_listener> http_;
+  std::string session_id_;
 
   template <typename... FnArgs>
   auto bind(void (catui_connection::*fn)(FnArgs...)) {
@@ -45,7 +48,13 @@ class catui_connection : public std::enable_shared_from_this<catui_connection> {
   }
 
 public:
-  catui_connection(catui_stream &&stream) : stream_{std::move(stream)} {}
+  catui_connection(catui_stream &&stream,
+                   const std::shared_ptr<http_listener> &http)
+      : stream_{std::move(stream)}, http_{http} {
+    session_id_ = http_->add_session(weak_from_this());
+  }
+
+  ~catui_connection() { http_->remove_session(session_id_); }
 
   // Start the asynchronous operation
   void run() { asio::dispatch(stream_.get_executor(), bind(&self::do_ack)); }
@@ -89,11 +98,9 @@ private:
 
     switch (msg.type) {
     case HTML_BEGIN_UPLOAD:
-      std::cerr << "Received upload message" << std::endl;
       do_read_upload(msg.msg.upload);
       break;
     case HTML_PROMPT:
-      std::cerr << "Received prompt message" << std::endl;
       do_prompt(msg.msg.prompt);
       break;
     default:
@@ -121,7 +128,9 @@ private:
   }
 
   void do_prompt(const prompt &msg) {
-    std::cerr << "Prompting: " << msg.url << std::endl;
+    std::cerr << "Prompting: "
+              << "http://localhost:" << http_->port() << '/' << session_id_
+              << msg.url << std::endl;
     do_recv();
   }
 };
@@ -136,21 +145,20 @@ int main(int argc, char *argv[]) {
   }
   auto const address = asio::ip::make_address("127.0.0.1");
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
-  auto const doc_root = std::make_shared<std::string>(".");
-
   // The io_context is required for all I/O
   asio::io_context ioc{};
 
   // Create and launch a listening port
-  std::make_shared<http_listener>(ioc, tcp::endpoint{address, port}, doc_root)
-      ->run();
+  auto http =
+      std::make_shared<http_listener>(ioc, tcp::endpoint{address, port});
+  http->run();
 
   auto lb = catui_server_fd(stderr);
   if (!lb) {
     return EXIT_FAILURE;
   }
 
-  std::thread th{[&ioc, lb]() {
+  std::thread th{[&ioc, lb, http]() {
     while (true) {
       int client = catui_server_accept(lb, stderr);
       if (client < 0) {
@@ -160,7 +168,7 @@ int main(int argc, char *argv[]) {
       }
 
       auto con = std::make_shared<catui_connection>(
-          catui_stream{asio::make_strand(ioc), client});
+          catui_stream{asio::make_strand(ioc), client}, http);
 
       con->run();
     }
