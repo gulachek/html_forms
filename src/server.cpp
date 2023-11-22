@@ -125,10 +125,20 @@ private:
     const auto &upload = upload_it->second;
 
     res.set(http::field::content_type, upload.mime_type);
-    res.body() = std::string{upload.contents.begin(), upload.contents.end()};
-    res.prepare_payload();
+    res.content_length(upload.contents.size());
+
+    // Respond to HEAD request
+    if (req.method() == http::verb::head) {
+      res.body() = "";
+      return res;
+    }
+
+    if (req.method() == http::verb::get) {
+      res.body() = std::string{upload.contents.begin(), upload.contents.end()};
+    }
 
     // Send the response
+    res.prepare_payload();
     return res;
   }
 
