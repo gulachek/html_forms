@@ -114,13 +114,14 @@ private:
 
   string_response respond(const std::string_view &target,
                           string_request &&req) override {
-    string_response res{http::status::ok, req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.keep_alive(req.keep_alive());
 
     auto upload_it = uploads_.find(std::string{target});
     if (upload_it == uploads_.end())
-      return respond404(res);
+      return respond404(std::move(req));
+
+    string_response res{http::status::ok, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.keep_alive(req.keep_alive());
 
     const auto &upload = upload_it->second;
 
@@ -142,7 +143,11 @@ private:
     return res;
   }
 
-  string_response respond404(string_response &res) {
+  string_response respond404(string_request &&req) {
+    string_response res{http::status::not_found, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.keep_alive(req.keep_alive());
+
     res.set(http::field::content_type, "text/plain");
     res.body() = std::string("Not found");
     res.prepare_payload();
