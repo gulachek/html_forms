@@ -115,6 +115,44 @@ private:
   string_response respond(const std::string_view &target,
                           string_request &&req) override {
 
+    switch (req.method()) {
+    case http::verb::post:
+      return respond_post(target, std::move(req));
+    case http::verb::head:
+    case http::verb::get:
+      return respond_get(target, std::move(req));
+    default:
+      break;
+    }
+
+    string_response res{http::status::bad_request, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.keep_alive(req.keep_alive());
+
+    std::ostringstream os;
+    os << "Request method '" << req.method_string() << "' not supported";
+
+    res.set(http::field::content_type, "text/plain");
+    res.body() = os.str();
+    res.prepare_payload();
+    return res;
+  }
+
+  string_response respond_post(const std::string_view &target,
+                               string_request &&req) {
+    string_response res{http::status::ok, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.keep_alive(req.keep_alive());
+
+    res.set(http::field::content_type, "text/plain");
+    res.content_length(2);
+    res.body() = "ok";
+    res.prepare_payload();
+    return res;
+  }
+
+  string_response respond_get(const std::string_view &target,
+                              string_request &&req) {
     auto upload_it = uploads_.find(std::string{target});
     if (upload_it == uploads_.end())
       return respond404(std::move(req));
