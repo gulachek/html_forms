@@ -42,6 +42,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::map<std::string, upload_file> uploads_;
   std::shared_ptr<http_listener> http_;
   std::string session_id_;
+  std::string submit_buf_;
 
   template <typename... FnArgs>
   auto bind(void (catui_connection::*fn)(FnArgs...)) {
@@ -60,6 +61,32 @@ public:
     // TODO - thread safety on http_ ptr
     session_id_ = http_->add_session(weak_from_this());
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
+  }
+
+  string_response respond(const std::string_view &target,
+                          string_request &&req) override {
+
+    switch (req.method()) {
+    case http::verb::post:
+      return respond_post(target, std::move(req));
+    case http::verb::head:
+    case http::verb::get:
+      return respond_get(target, std::move(req));
+    default:
+      break;
+    }
+
+    string_response res{http::status::bad_request, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.keep_alive(req.keep_alive());
+
+    std::ostringstream os;
+    os << "Request method '" << req.method_string() << "' not supported";
+
+    res.set(http::field::content_type, "text/plain");
+    res.body() = os.str();
+    res.prepare_payload();
+    return res;
   }
 
 private:
@@ -112,43 +139,38 @@ private:
     }
   }
 
-  string_response respond(const std::string_view &target,
-                          string_request &&req) override {
-
-    switch (req.method()) {
-    case http::verb::post:
-      return respond_post(target, std::move(req));
-    case http::verb::head:
-    case http::verb::get:
-      return respond_get(target, std::move(req));
-    default:
-      break;
-    }
-
-    string_response res{http::status::bad_request, req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.keep_alive(req.keep_alive());
-
-    std::ostringstream os;
-    os << "Request method '" << req.method_string() << "' not supported";
-
-    res.set(http::field::content_type, "text/plain");
-    res.body() = os.str();
-    res.prepare_payload();
-    return res;
-  }
-
   string_response respond_post(const std::string_view &target,
                                string_request &&req) {
-    string_response res{http::status::ok, req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.keep_alive(req.keep_alive());
+    if (target == "/submit") {
+      std::cerr << "Initiating post with body: " << req.body() << std::endl;
+      submit_buf_ = std::move(req.body());
+      asio::dispatch(bind(&self::submit_post));
 
-    res.set(http::field::content_type, "text/plain");
-    res.content_length(2);
-    res.body() = "ok";
-    res.prepare_payload();
-    return res;
+      string_response res{http::status::ok, req.version()};
+      res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+      res.keep_alive(req.keep_alive());
+      res.set(http::field::content_type, "text/plain");
+      res.content_length(2);
+      res.body() = "ok";
+      res.prepare_payload();
+      return res;
+    } else {
+      return respond404(std::move(req));
+    }
+  }
+
+  void submit_post() {
+    std::cerr << "Posting body: " << submit_buf_ << std::endl;
+    auto buf = asio::buffer(submit_buf_.data(), 4096);
+    async_msgstream_send(stream_, buf, submit_buf_.size(),
+                         bind(&self::on_submit_post));
+  }
+
+  void on_submit_post(std::error_condition ec, msgstream_size n) {
+    if (ec) {
+      std::cerr << "Error sending post to app: " << ec.message() << std::endl;
+      return;
+    }
   }
 
   string_response respond_get(const std::string_view &target,
