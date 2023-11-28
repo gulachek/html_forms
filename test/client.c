@@ -94,6 +94,10 @@ int main() {
     return 1;
   }
 
+  if (!upload_file(fd, "/index.css", "./test/index.css", "text/css", stderr)) {
+    return 1;
+  }
+
   char buf[PROMPT_SIZE];
   if (!prompt(fd, "/index.html", buf, stderr)) {
     return 1;
