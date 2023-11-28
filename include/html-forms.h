@@ -10,6 +10,7 @@
 #define HTML_API
 #endif
 
+#include <stdio.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus
@@ -35,6 +36,8 @@ struct html_msg {
     struct prompt prompt;
   } msg;
 };
+
+int HTML_API html_connect(FILE *err);
 
 int HTML_API html_encode_upload(const char *url, size_t content_length,
                                 const char *mime_type);

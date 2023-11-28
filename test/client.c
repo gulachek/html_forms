@@ -1,3 +1,5 @@
+#include <html-forms.h>
+
 #include <catui.h>
 #include <msgstream.h>
 #include <stdio.h>
@@ -10,26 +12,6 @@
 #define URLSIZE 512
 #define MIMELEN 128
 #define PROMPT_SIZE 4096
-
-enum msg_type { BEGIN_UPLOAD = 0, PROMPT = 1 };
-
-struct begin_upload {
-  char url[URLSIZE];
-  size_t content_length;
-  char mime_type[MIMELEN];
-};
-
-struct prompt {
-  char url[URLSIZE];
-};
-
-struct html_msg {
-  enum msg_type type;
-  union {
-    struct begin_upload upload;
-    struct prompt prompt;
-  } msg;
-};
 
 // TODO - check off by one for '\0' at end of c string
 int validate_snprintf(int ret, char **pbuf, size_t *buflen, FILE *err) {
@@ -58,14 +40,14 @@ int send_message(int fd, struct html_msg *msg, FILE *err) {
     return 0;
   }
 
-  if (msg->type == BEGIN_UPLOAD) {
+  if (msg->type == HTML_BEGIN_UPLOAD) {
     struct begin_upload *upload = &msg->msg.upload;
     // TODO - json encode strings
     ret = snprintf(buf, buflen, "\"size\":%lu,\"mime\":\"%s\",\"url\":\"%s\"}",
                    upload->content_length, upload->mime_type, upload->url);
     if (!validate_snprintf(ret, &buf, &buflen, err))
       return 0;
-  } else if (msg->type == PROMPT) {
+  } else if (msg->type == HTML_PROMPT) {
     struct prompt *prompt = &msg->msg.prompt;
     ret = snprintf(buf, buflen, "\"url\":\"%s\"}", prompt->url);
     if (!validate_snprintf(ret, &buf, &buflen, err))
@@ -85,7 +67,9 @@ int upload_file(int fd, const char *url_path_abs, const char *file_path,
 int prompt(int fd, const char *url_path_abs, char *prompt_buf, FILE *err);
 
 int main() {
-  int fd = catui_connect("com.gulachek.html-forms", "0.1.0", stderr);
+  // int fd = catui_connect("com.gulachek.html-forms", "0.1.0", stderr);
+  int fd = html_connect(stderr);
+
   if (fd == -1)
     return 1;
 
@@ -126,7 +110,7 @@ int upload_file(int fd, const char *url_path_abs, const char *file_path,
   }
 
   struct html_msg msg;
-  msg.type = BEGIN_UPLOAD;
+  msg.type = HTML_BEGIN_UPLOAD;
   struct begin_upload *upload = &msg.msg.upload;
   strncpy(upload->mime_type, mime, MIMELEN);
   strncpy(upload->url, url_path_abs, URLSIZE);
@@ -161,7 +145,7 @@ int upload_file(int fd, const char *url_path_abs, const char *file_path,
 
 int prompt(int fd, const char *url_path_abs, char *prompt_buf, FILE *err) {
   struct html_msg msg;
-  msg.type = PROMPT;
+  msg.type = HTML_PROMPT;
   struct prompt *prompt = &msg.msg.prompt;
   strncpy(prompt->url, url_path_abs, URLSIZE);
   if (!send_message(fd, &msg, err)) {

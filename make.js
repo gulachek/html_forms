@@ -28,7 +28,7 @@ cli((book, opts) => {
 			HTML_API: 'EXPORT',
 		},
 		src: ['src/html-forms.c'],
-		link: ['msgstream', 'cjson'],
+		link: ['msgstream', 'cjson', 'catui'],
 	});
 
 	const client = c.addExecutable({

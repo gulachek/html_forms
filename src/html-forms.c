@@ -1,5 +1,6 @@
 #include "html-forms.h"
 
+#include <catui.h>
 #include <cjson/cJSON.h>
 #include <string.h>
 
@@ -24,6 +25,9 @@ struct html_msg {
   } msg;
 };
 */
+int html_connect(FILE *err) {
+  return catui_connect("com.gulachek.html-forms", "0.1.0", err);
+}
 
 int html_encode_upload(const char *url, size_t content_length,
                        const char *mime_type) {
