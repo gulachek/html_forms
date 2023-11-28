@@ -12,15 +12,7 @@ cli((book, opts) => {
 
 	const config = Path.build('catui/com.gulachek.html-forms/0.1.0/config.json');
 
-	const server = Path.src('dist/server.js');
-
-	const bindings = Path.src('binding.gyp');
-	const gypMakefile = Path.build('Makefile');
-	const addon = Path.build('Release/addon.node');
-	const addonSrc = Path.src('src/catui_server.cc');
-	//const tsc = Path.build('tsc');
-
-	book.add('all', [config, addon]);
+	book.add('all', [config]);
 
 	const htmlLib = c.addLibrary({
 		name: 'html-forms',
@@ -47,7 +39,7 @@ cli((book, opts) => {
 	const urlTest = c.addExecutable({
 		name: 'url_test',
 		src: ['test/url_test.cpp'],
-		link: ['boost-unit_test_framework', htmlLib],
+		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
 	});
 
 	const test = Path.build('test');
@@ -69,27 +61,4 @@ cli((book, opts) => {
 			'utf8',
 		);
 	});
-
-	/*
-	const addonLib = c.addLibrary({
-		name: 'addon',
-		version: '0.1.0',
-		src: ['src/catui_server.cc'],
-		link: ['node'],
-	});
-	*/
-
-	book.add(gypMakefile, bindings, (args) => {
-		return args.spawn('node-gyp', ['configure']);
-	});
-
-	book.add(addon, [gypMakefile, addonSrc], (args) => {
-		return args.spawn('node-gyp', ['build']);
-	});
-
-	/*
-	book.add(tsc, (args) => {
-		return args.spawn('npx', ['tsc']);
-	});
-	*/
 });
