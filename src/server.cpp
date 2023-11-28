@@ -17,6 +17,7 @@
 #include "catui.h"
 #include "html-forms.h"
 #include "http_listener.hpp"
+#include "open-url.hpp"
 
 extern "C" {
 #include <catui_server.h>
@@ -233,9 +234,10 @@ private:
   }
 
   void do_prompt(const prompt &msg) {
-    std::cerr << "Prompting: "
-              << "http://localhost:" << http_->port() << '/' << session_id_
-              << msg.url << std::endl;
+    std::ostringstream os;
+    os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
+    std::cerr << "Opening " << os.str() << std::endl;
+    open_url(os.str());
     do_recv();
   }
 };
