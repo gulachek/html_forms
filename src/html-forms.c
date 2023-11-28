@@ -1,8 +1,12 @@
 #include "html-forms.h"
+#include "msgstream.h"
 
 #include <catui.h>
 #include <cjson/cJSON.h>
 #include <string.h>
+
+#include <sys/stat.h>
+#include <unistd.h>
 
 /*
 enum msg_type { HTML_BEGIN_UPLOAD = 0, HTML_PROMPT = 1 };
@@ -29,12 +33,83 @@ int html_connect(FILE *err) {
   return catui_connect("com.gulachek.html-forms", "0.1.0", err);
 }
 
-int html_encode_upload(const char *url, size_t content_length,
-                       const char *mime_type) {
-  return 0;
+msgstream_size html_encode_upload(void *data, size_t size, const char *url,
+                                  size_t content_length,
+                                  const char *mime_type) {
+  // url: string
+  // mime: string
+  // size: number
+
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "size", content_length))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddStringToObject(obj, "mime", mime_type))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddStringToObject(obj, "url", url))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return MSGSTREAM_ERR;
+
+  cJSON_Delete(obj);
+  return strlen(data);
 }
 
-int html_encode_prompt(const char *url) { return 0; }
+int html_upload(msgstream_fd fd, const char *url, const char *file_path,
+                const char *mime_type) {
+  struct stat stats;
+  if (stat(file_path, &stats) == -1) {
+    return -1;
+  }
+
+  char buf[HTML_MSG_SIZE];
+  msgstream_size n =
+      html_encode_upload(buf, sizeof(buf), url, stats.st_size, mime_type);
+  if (n < 0)
+    return n;
+
+  if (msgstream_send(fd, buf, sizeof(buf), n, NULL) < 0)
+    return -1;
+
+  FILE *f = fopen(file_path, "r");
+  if (!f)
+    return -1;
+
+  size_t nleft = stats.st_size;
+  while (nleft) {
+    size_t n_to_read = HTML_MSG_SIZE < nleft ? HTML_MSG_SIZE : nleft;
+    size_t nread = fread(buf, 1, n_to_read, f);
+    if (nread == 0)
+      return -1;
+
+    nleft -= nread;
+
+    if (write(fd, buf, nread) == -1) {
+      perror("write");
+      return -1;
+    }
+  }
+
+  return stats.st_size;
+}
+
+msgstream_size html_encode_prompt(void *data, size_t size, const char *url) {
+  return -1;
+}
+
+int html_prompt(msgstream_fd fd, const char *url) {
+  char buf[HTML_MSG_SIZE];
+  msgstream_size n = html_encode_prompt(buf, sizeof(buf), url);
+  if (n < 0)
+    return n;
+
+  return msgstream_send(fd, buf, sizeof(buf), n, NULL);
+}
 
 static int copy_string(cJSON *obj, const char *prop, char *out,
                        size_t out_size) {

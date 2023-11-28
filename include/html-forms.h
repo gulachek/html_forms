@@ -10,6 +10,7 @@
 #define HTML_API
 #endif
 
+#include <msgstream.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -39,10 +40,18 @@ struct html_msg {
 
 int HTML_API html_connect(FILE *err);
 
-int HTML_API html_encode_upload(const char *url, size_t content_length,
-                                const char *mime_type);
+msgstream_size HTML_API html_encode_upload(void *data, size_t size,
+                                           const char *url,
+                                           size_t content_length,
+                                           const char *mime_type);
 
-int HTML_API html_encode_prompt(const char *url);
+int HTML_API html_upload(msgstream_fd fd, const char *url,
+                         const char *file_path, const char *mime_type);
+
+msgstream_size HTML_API html_encode_prompt(void *data, size_t size,
+                                           const char *url);
+
+int HTML_API html_prompt(msgstream_fd fd, const char *url);
 
 int HTML_API html_decode_msg(const void *data, size_t size,
                              struct html_msg *msg);
