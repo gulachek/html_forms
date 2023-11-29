@@ -82,6 +82,11 @@ int main() {
     return 1;
   }
 
+  if (!upload_file(fd, "/favicon.ico", "./test/favicon.ico", "image/x-icon",
+                   stderr)) {
+    return 1;
+  }
+
   char buf[PROMPT_SIZE];
   if (!prompt(fd, "/index.html", buf, stderr)) {
     return 1;

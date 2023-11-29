@@ -2,12 +2,16 @@
 #include "html-forms.h"
 #include "mime_type.hpp"
 #include <complex>
+#include <span>
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
 namespace net = boost::asio;      // from <boost/asio.hpp>
 namespace asio = boost::asio;     // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
+                                  //
+
+std::span<const std::uint8_t> forms_js();
 
 using session_map = std::map<std::string, std::weak_ptr<http_session>>;
 
@@ -65,12 +69,19 @@ public:
 
     std::string target{req_.target()};
     char session_id[128], normalized_target[256];
-    int found =
+    int parse_success =
         html_parse_target(target.c_str(), session_id, sizeof(session_id),
                           normalized_target, sizeof(normalized_target));
 
-    if (!found)
+    if (!parse_success)
       return respond404("Target path not parsed");
+
+    std::string_view session_sv{session_id}, target_sv{normalized_target};
+    std::cerr << "Session: " << session_sv << ", target: " << normalized_target
+              << std::endl;
+
+    if (session_sv == "html")
+      return respond(normalized_target);
 
     auto it = sessions_.find(session_id);
     if (it == sessions_.end())
@@ -81,6 +92,28 @@ public:
     } else {
       return respond404("Session expired");
     }
+  }
+
+  void respond(const std::string_view &target) {
+    if (target == "/forms.js")
+      return respond_span("text/javascript", forms_js());
+
+    return respond404("Not found");
+  }
+
+  void respond_span(const std::string_view &mime,
+                    const std::span<const std::uint8_t> &contents) {
+    http::response<http::span_body<const std::uint8_t>> res{http::status::ok,
+                                                            req_.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.set(http::field::content_type, mime);
+    res.keep_alive(req_.keep_alive());
+    res.body() =
+        boost::span<const std::uint8_t>{contents.data(), contents.size()};
+    res.prepare_payload();
+
+    // Send the response
+    send_response(std::move(res));
   }
 
   void respond404(const char *msg) {

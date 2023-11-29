@@ -1,6 +1,6 @@
 import { cli, Path } from 'esmakefile';
 import { C, platformCompiler } from 'esmakefile-c';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 
 cli((book, opts) => {
@@ -39,6 +39,15 @@ cli((book, opts) => {
 			break;
 	}
 
+	const formsJs = Path.src('src/forms.js');
+	const formsJsCpp = Path.build('forms_js.cpp');
+	book.add(formsJsCpp, [formsJs], async (args) => {
+		const [cpp, js] = args.absAll(formsJsCpp, formsJs);
+
+		const buf = await readFile(js);
+		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
+	});
+
 	const cppServer = c.addExecutable({
 		name: 'server',
 		precompiledHeader: 'include/asio-pch.hpp',
@@ -48,6 +57,7 @@ cli((book, opts) => {
 			'src/mime_type.cpp',
 			'src/http_listener.cpp',
 			'src/open-url.cpp',
+			formsJsCpp,
 		],
 		link: ['catui-server', htmlLib],
 	});
@@ -78,3 +88,27 @@ cli((book, opts) => {
 		);
 	});
 });
+
+function bufToCppArray(identifier, buf) {
+	const array = `${identifier}_array__`;
+
+	const pieces = [
+		`#include <span>
+		#include <cstdint>
+
+		const std::uint8_t ${array}[${buf.length}] = {`,
+	];
+
+	if (buf.length > 0) pieces.push(buf[0]);
+
+	for (let i = 1; i < buf.length; ++i) {
+		pieces.push(',', buf[i]);
+	}
+
+	pieces.push(`};
+	std::span<const std::uint8_t> ${identifier}() {
+		return std::span<const std::uint8_t>{${array}, ${buf.length}};
+	}`);
+
+	return pieces.join('');
+}
