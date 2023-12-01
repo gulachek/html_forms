@@ -37,7 +37,7 @@ class Connection {
 
 		// Event listener for receiving messages from the server
 		this.ws.addEventListener('message', (e) => {
-			console.log('Received message from server:', e.data);
+			this.onMessage(e);
 		});
 
 		// Event listener for handling errors
@@ -49,6 +49,24 @@ class Connection {
 		this.ws.addEventListener('close', () => {
 			console.log('WebSocket connection closed');
 		});
+	}
+
+	onMessage(e) {
+		let obj;
+		try {
+			obj = JSON.parse(e.data);
+		} catch (ex) {
+			alert('Error parsing JSON message from server. See console for details.');
+			console.error(ex);
+		}
+
+		switch (obj.type) {
+			case 'navigate':
+				window.location.href = obj.href;
+				break;
+			default:
+				alert(`Unknown action type: ${obj.type}`);
+		}
 	}
 }
 

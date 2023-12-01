@@ -12,6 +12,7 @@
 #include <boost/beast/version.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/config.hpp>
+#include <boost/json.hpp>
 #include <cstdlib>
 #include <functional>
 #include <iostream>

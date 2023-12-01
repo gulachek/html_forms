@@ -18,7 +18,6 @@
 #include "html-forms.h"
 #include "http_listener.hpp"
 #include "open-url.hpp"
-#include <optional>
 
 extern "C" {
 #include <catui_server.h>
@@ -28,6 +27,7 @@ namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace ws = beast::websocket;
+namespace json = boost::json;
 
 using asio::ip::tcp;
 
@@ -50,6 +50,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::string session_id_;
   std::string submit_buf_;
   beast::flat_buffer ws_buf_;
+  std::string ws_send_buf_;
 
   std::shared_ptr<ws_stream> ws_;
 
@@ -199,6 +200,14 @@ private:
     do_ws_read();
   }
 
+  void on_ws_write(beast::error_code ec, std::size_t size) {
+    if (ec) {
+      std::cerr << "Failed to send ws message for session " << session_id_
+                << std::endl;
+      return;
+    }
+  }
+
   string_response respond_post(const std::string_view &target,
                                string_request &&req) {
     if (target == "/submit") {
@@ -296,7 +305,18 @@ private:
     std::ostringstream os;
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     std::cerr << "Opening " << os.str() << std::endl;
-    open_url(os.str());
+
+    if (ws_) {
+      // TODO - needs to account for reconnect across navigation
+      json::object navigate;
+      navigate["type"] = "navigate";
+      navigate["href"] = os.str();
+      ws_send_buf_ = json::serialize(navigate);
+      ws_->async_write(asio::buffer(ws_send_buf_), bind(&self::on_ws_write));
+    } else {
+      open_url(os.str());
+    }
+
     do_recv();
   }
 };

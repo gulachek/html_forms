@@ -59,7 +59,7 @@ cli((book, opts) => {
 			'src/open-url.cpp',
 			formsJsCpp,
 		],
-		link: ['catui-server', htmlLib],
+		link: ['catui-server', htmlLib, 'boost-json'],
 	});
 
 	const urlTest = c.addExecutable({

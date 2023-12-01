@@ -92,7 +92,19 @@ int main() {
     return 1;
   }
 
+  if (!upload_file(fd, "/other.html", "./test/other.html", "text/html",
+                   stderr)) {
+    return 1;
+  }
+
   printf("Read body: %s\n", buf);
+
+  if (!prompt(fd, "/other.html", buf, stderr)) {
+    return 1;
+  }
+
+  printf("Read body: %s\n", buf);
+
   return 0;
 }
 
