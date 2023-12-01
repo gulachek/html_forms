@@ -4,13 +4,14 @@
 #include <complex>
 #include <span>
 
-namespace beast = boost::beast;   // from <boost/beast.hpp>
-namespace http = beast::http;     // from <boost/beast/http.hpp>
-namespace net = boost::asio;      // from <boost/asio.hpp>
-namespace asio = boost::asio;     // from <boost/asio.hpp>
-using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
-                                  //
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace ws = beast::websocket;
+namespace net = boost::asio;
+namespace asio = boost::asio;
+using tcp = boost::asio::ip::tcp;
 
+// implemented in generated file (see make.js)
 std::span<const std::uint8_t> forms_js();
 
 using session_map = std::map<std::string, std::weak_ptr<http_session>>;
@@ -77,8 +78,9 @@ public:
       return respond404("Target path not parsed");
 
     std::string_view session_sv{session_id}, target_sv{normalized_target};
-    std::cerr << "Session: " << session_sv << ", target: " << normalized_target
-              << std::endl;
+
+    std::cerr << '[' << session_sv << "] " << req_.method_string() << ' '
+              << normalized_target << std::endl;
 
     if (session_sv == "html")
       return respond(normalized_target);
@@ -88,7 +90,16 @@ public:
       return respond404("No session");
 
     if (auto session_ptr = it->second.lock()) {
-      send_response(session_ptr->respond(normalized_target, std::move(req_)));
+      if (ws::is_upgrade(req_)) {
+        if (target_sv != "/ws") {
+          return respond404("Not found");
+        }
+
+        session_ptr->connect_ws(stream_.release_socket(), std::move(req_));
+
+      } else {
+        send_response(session_ptr->respond(normalized_target, std::move(req_)));
+      }
     } else {
       return respond404("Session expired");
     }

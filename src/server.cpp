@@ -18,16 +18,21 @@
 #include "html-forms.h"
 #include "http_listener.hpp"
 #include "open-url.hpp"
+#include <optional>
 
 extern "C" {
 #include <catui_server.h>
 }
 
 namespace asio = boost::asio;
-namespace http = boost::beast::http;
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace ws = beast::websocket;
+
 using asio::ip::tcp;
 
 typedef asio::posix::stream_descriptor catui_stream;
+typedef ws::stream<beast::tcp_stream> ws_stream;
 
 struct upload_file {
   std::vector<std::uint8_t> contents;
@@ -44,6 +49,9 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::shared_ptr<http_listener> http_;
   std::string session_id_;
   std::string submit_buf_;
+  beast::flat_buffer ws_buf_;
+
+  std::shared_ptr<ws_stream> ws_;
 
   template <typename... FnArgs>
   auto bind(void (catui_connection::*fn)(FnArgs...)) {
@@ -88,6 +96,23 @@ public:
     res.body() = os.str();
     res.prepare_payload();
     return res;
+  }
+
+  void connect_ws(boost::asio::ip::tcp::socket &&sock,
+                  string_request &&req) override {
+    if (ws_) {
+      std::cerr << "Aborting websocket connection because one already exists "
+                   "for the session"
+                << std::endl;
+      sock.close();
+      return;
+    }
+
+    ws_ = std::make_shared<ws_stream>(std::move(sock));
+    ws_->set_option(
+        ws::stream_base::timeout::suggested(beast::role_type::server));
+
+    ws_->async_accept(req, bind(&self::on_ws_accept));
   }
 
 private:
@@ -138,6 +163,40 @@ private:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
     }
+  }
+
+  void on_ws_accept(beast::error_code ec) {
+    if (ec) {
+      std::cerr << "Failed to accept websocket: " << ec.message() << std::endl;
+      return;
+    }
+
+    std::cerr << "Websocket connected" << std::endl;
+    do_ws_read();
+  }
+
+  void do_ws_read() {
+    if (!ws_) {
+      std::cerr << "Invalid do_ws_read with no websocket connection"
+                << std::endl;
+      return;
+    }
+
+    ws_->async_read(ws_buf_, bind(&self::on_ws_read));
+  }
+
+  void on_ws_read(beast::error_code ec, std::size_t size) {
+    if (ec) {
+      std::cerr << "Failed to read ws message for session " << session_id_
+                << std::endl;
+      return;
+    }
+
+    auto msg = beast::buffers_to_string(ws_buf_.data());
+    ws_buf_.consume(size);
+
+    std::cerr << "Received message: " << msg << std::endl;
+    do_ws_read();
   }
 
   string_response respond_post(const std::string_view &target,

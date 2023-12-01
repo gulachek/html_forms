@@ -13,6 +13,9 @@ struct http_session {
   virtual ~http_session() {}
   virtual string_response respond(const std::string_view &target,
                                   string_request &&req) = 0;
+
+  virtual void connect_ws(boost::asio::ip::tcp::socket &&sock,
+                          string_request &&req) = 0;
 };
 
 // Accepts incoming connections and launches the sessions
