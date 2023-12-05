@@ -9,6 +9,10 @@ namespace asio = boost::asio;
 
 typedef asio::posix::stream_descriptor stream_descriptor;
 
+void async_readn(stream_descriptor &stream,
+                 const boost::asio::mutable_buffer &buf, std::size_t n,
+                 const std::function<void(std::error_code, std::size_t)> &cb);
+
 void async_msgstream_send(stream_descriptor &stream,
                           const boost::asio::const_buffer &buf,
                           std::size_t msg_size,

@@ -3,6 +3,12 @@
 
 namespace my {
 
+void async_readn(stream_descriptor &stream,
+                 const boost::asio::mutable_buffer &buf, std::size_t n,
+                 const std::function<void(std::error_code, std::size_t)> &cb) {
+  return asio::async_read(stream, buf, asio::transfer_exactly(n), cb);
+}
+
 void async_msgstream_send(stream_descriptor &stream,
                           const boost::asio::const_buffer &buf,
                           std::size_t msg_size,

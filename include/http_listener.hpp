@@ -2,20 +2,16 @@
 #define HTTP_LISTENER_HPP
 
 #include "asio-pch.hpp"
+#include "my-beast.hpp"
 #include <memory>
-
-using string_response =
-    boost::beast::http::response<boost::beast::http::string_body>;
-using string_request =
-    boost::beast::http::request<boost::beast::http::string_body>;
 
 struct http_session {
   virtual ~http_session() {}
-  virtual string_response respond(const std::string_view &target,
-                                  string_request &&req) = 0;
+  virtual my::string_response respond(const std::string_view &target,
+                                      my::string_request &&req) = 0;
 
   virtual void connect_ws(boost::asio::ip::tcp::socket &&sock,
-                          string_request &&req) = 0;
+                          my::string_request &&req) = 0;
 };
 
 // Accepts incoming connections and launches the sessions

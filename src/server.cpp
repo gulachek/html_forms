@@ -17,6 +17,7 @@
 #include "html-forms.h"
 #include "http_listener.hpp"
 #include "my-asio.hpp"
+#include "my-beast.hpp"
 #include "open-url.hpp"
 
 extern "C" {
@@ -26,12 +27,9 @@ extern "C" {
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
-namespace ws = beast::websocket;
 namespace json = boost::json;
 
 using asio::ip::tcp;
-
-typedef ws::stream<beast::tcp_stream> ws_stream;
 
 struct upload_file {
   std::vector<std::uint8_t> contents;
@@ -50,8 +48,9 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::string submit_buf_;
   beast::flat_buffer ws_buf_;
   std::string ws_send_buf_;
+  bool has_begun_web_page_;
 
-  std::shared_ptr<ws_stream> ws_;
+  std::shared_ptr<my::ws_stream> ws_;
 
   template <typename... FnArgs>
   auto bind(void (catui_connection::*fn)(FnArgs...)) {
@@ -61,7 +60,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
 public:
   catui_connection(my::stream_descriptor &&stream,
                    const std::shared_ptr<http_listener> &http)
-      : stream_{std::move(stream)}, http_{http} {}
+      : stream_{std::move(stream)}, http_{http}, has_begun_web_page_{false} {}
 
   ~catui_connection() { http_->remove_session(session_id_); }
 
@@ -72,8 +71,8 @@ public:
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
   }
 
-  string_response respond(const std::string_view &target,
-                          string_request &&req) override {
+  my::string_response respond(const std::string_view &target,
+                              my::string_request &&req) override {
 
     switch (req.method()) {
     case http::verb::post:
@@ -85,7 +84,7 @@ public:
       break;
     }
 
-    string_response res{http::status::bad_request, req.version()};
+    my::string_response res{http::status::bad_request, req.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     res.keep_alive(req.keep_alive());
 
@@ -99,7 +98,7 @@ public:
   }
 
   void connect_ws(boost::asio::ip::tcp::socket &&sock,
-                  string_request &&req) override {
+                  my::string_request &&req) override {
     if (ws_) {
       std::cerr << "Aborting websocket connection because one already exists "
                    "for the session"
@@ -108,11 +107,8 @@ public:
       return;
     }
 
-    ws_ = std::make_shared<ws_stream>(std::move(sock));
-    ws_->set_option(
-        ws::stream_base::timeout::suggested(beast::role_type::server));
-
-    ws_->async_accept(req, bind(&self::on_ws_accept));
+    ws_ = my::make_ws_ptr(std::move(sock));
+    my::async_ws_accept(*ws_, req, bind(&self::on_ws_accept));
   }
 
 private:
@@ -176,6 +172,8 @@ private:
     do_ws_read();
   }
 
+  void end_ws() { ws_ = nullptr; }
+
   void do_ws_read() {
     if (!ws_) {
       std::cerr << "Invalid do_ws_read with no websocket connection"
@@ -183,14 +181,14 @@ private:
       return;
     }
 
-    ws_->async_read(ws_buf_, bind(&self::on_ws_read));
+    my::async_ws_read(*ws_, ws_buf_, bind(&self::on_ws_read));
   }
 
   void on_ws_read(beast::error_code ec, std::size_t size) {
     if (ec) {
       std::cerr << "Failed to read ws message for session " << session_id_
                 << std::endl;
-      return;
+      return end_ws();
     }
 
     auto msg = beast::buffers_to_string(ws_buf_.data());
@@ -204,18 +202,18 @@ private:
     if (ec) {
       std::cerr << "Failed to send ws message for session " << session_id_
                 << std::endl;
-      return;
+      return end_ws();
     }
   }
 
-  string_response respond_post(const std::string_view &target,
-                               string_request &&req) {
+  my::string_response respond_post(const std::string_view &target,
+                                   my::string_request &&req) {
     if (target == "/submit") {
       std::cerr << "Initiating post with body: " << req.body() << std::endl;
       submit_buf_ = std::move(req.body());
       asio::dispatch(bind(&self::submit_post));
 
-      string_response res{http::status::ok, req.version()};
+      my::string_response res{http::status::ok, req.version()};
       res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
       res.keep_alive(req.keep_alive());
       res.set(http::field::content_type, "text/plain");
@@ -242,13 +240,13 @@ private:
     }
   }
 
-  string_response respond_get(const std::string_view &target,
-                              string_request &&req) {
+  my::string_response respond_get(const std::string_view &target,
+                                  my::string_request &&req) {
     auto upload_it = uploads_.find(std::string{target});
     if (upload_it == uploads_.end())
       return respond404(std::move(req));
 
-    string_response res{http::status::ok, req.version()};
+    my::string_response res{http::status::ok, req.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     res.keep_alive(req.keep_alive());
 
@@ -272,8 +270,8 @@ private:
     return res;
   }
 
-  string_response respond404(string_request &&req) {
-    string_response res{http::status::not_found, req.version()};
+  my::string_response respond404(my::string_request &&req) {
+    my::string_response res{http::status::not_found, req.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     res.keep_alive(req.keep_alive());
 
@@ -287,9 +285,8 @@ private:
     auto &upload = uploads_[msg.url];
     upload.mime_type = msg.mime_type;
     upload.contents.resize(msg.content_length);
-    async_read(stream_, asio::buffer(upload.contents),
-               asio::transfer_exactly(msg.content_length),
-               bind(&self::on_read_upload));
+    my::async_readn(stream_, asio::buffer(upload.contents), msg.content_length,
+                    bind(&self::on_read_upload));
   }
 
   void on_read_upload(std::error_code ec, std::size_t n) {
@@ -306,14 +303,16 @@ private:
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     std::cerr << "Opening " << os.str() << std::endl;
 
-    if (ws_) {
+    if (has_begun_web_page_) {
       // TODO - needs to account for reconnect across navigation
       json::object navigate;
       navigate["type"] = "navigate";
       navigate["href"] = os.str();
       ws_send_buf_ = json::serialize(navigate);
-      ws_->async_write(asio::buffer(ws_send_buf_), bind(&self::on_ws_write));
+      my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
+                         bind(&self::on_ws_write));
     } else {
+      has_begun_web_page_ = true;
       open_url(os.str());
     }
 
