@@ -57,6 +57,7 @@ cli((book, opts) => {
 			'src/mime_type.cpp',
 			'src/http_listener.cpp',
 			'src/open-url.cpp',
+			'src/my-asio.cpp',
 			formsJsCpp,
 		],
 		link: ['catui-server', htmlLib, 'boost-json'],

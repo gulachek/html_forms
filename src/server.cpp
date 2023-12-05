@@ -13,10 +13,10 @@
 //
 //------------------------------------------------------------------------------
 #include "asio-pch.hpp"
-#include "async_msgstream.hpp"
 #include "catui.h"
 #include "html-forms.h"
 #include "http_listener.hpp"
+#include "my-asio.hpp"
 #include "open-url.hpp"
 
 extern "C" {
@@ -31,7 +31,6 @@ namespace json = boost::json;
 
 using asio::ip::tcp;
 
-typedef asio::posix::stream_descriptor catui_stream;
 typedef ws::stream<beast::tcp_stream> ws_stream;
 
 struct upload_file {
@@ -43,7 +42,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
                          public http_session {
   using self = catui_connection;
 
-  catui_stream stream_;
+  my::stream_descriptor stream_;
   std::vector<std::uint8_t> buf_;
   std::map<std::string, upload_file> uploads_;
   std::shared_ptr<http_listener> http_;
@@ -60,7 +59,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   }
 
 public:
-  catui_connection(catui_stream &&stream,
+  catui_connection(my::stream_descriptor &&stream,
                    const std::shared_ptr<http_listener> &http)
       : stream_{std::move(stream)}, http_{http} {}
 
@@ -123,7 +122,8 @@ private:
     if (n < 0)
       return;
 
-    async_msgstream_send(stream_, asio::buffer(buf_), n, bind(&self::on_ack));
+    my::async_msgstream_send(stream_, asio::buffer(buf_), n,
+                             bind(&self::on_ack));
   }
 
   void on_ack(std::error_condition ec, msgstream_size n) {
@@ -137,7 +137,7 @@ private:
   }
 
   void do_recv() {
-    async_msgstream_recv(stream_, asio::buffer(buf_), bind(&self::on_recv));
+    my::async_msgstream_recv(stream_, asio::buffer(buf_), bind(&self::on_recv));
   }
 
   void on_recv(std::error_condition ec, msgstream_size n) {
@@ -231,8 +231,8 @@ private:
   void submit_post() {
     std::cerr << "Posting body: " << submit_buf_ << std::endl;
     auto buf = asio::buffer(submit_buf_.data(), 4096);
-    async_msgstream_send(stream_, buf, submit_buf_.size(),
-                         bind(&self::on_submit_post));
+    my::async_msgstream_send(stream_, buf, submit_buf_.size(),
+                             bind(&self::on_submit_post));
   }
 
   void on_submit_post(std::error_condition ec, msgstream_size n) {
@@ -354,7 +354,7 @@ int main(int argc, char *argv[]) {
       }
 
       auto con = std::make_shared<catui_connection>(
-          catui_stream{asio::make_strand(ioc), client}, http);
+          my::stream_descriptor{asio::make_strand(ioc), client}, http);
 
       con->run();
     }
