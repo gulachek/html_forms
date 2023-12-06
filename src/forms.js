@@ -19,6 +19,7 @@ window.addEventListener('submit', (e) => {
 
 class Connection {
 	ws;
+	dialog;
 
 	constructor() {}
 
@@ -28,11 +29,8 @@ class Connection {
 		this.ws = new WebSocket(url);
 
 		// Event listener for when the connection is opened
-		this.ws.addEventListener('open', () => {
-			console.log('WebSocket connection opened');
-
-			// Send a message to the server after the connection is established
-			this.ws.send('Hello, Server!');
+		this.ws.addEventListener('open', (e) => {
+			this.onOpen(e);
 		});
 
 		// Event listener for receiving messages from the server
@@ -42,12 +40,54 @@ class Connection {
 
 		// Event listener for handling errors
 		this.ws.addEventListener('error', (e) => {
-			console.error('WebSocket error:', e);
+			this.onError(e);
 		});
 
 		// Event listener for when the connection is closed
-		this.ws.addEventListener('close', () => {
-			console.log('WebSocket connection closed');
+		this.ws.addEventListener('close', (e) => {
+			this.onClose(e);
+		});
+	}
+
+	showAlert(msg, opts) {
+		if (this.dialog) {
+			document.body.removeChild(this.dialog);
+		}
+
+		opts = opts || {};
+
+		this.dialog = document.createElement('dialog');
+
+		if (opts.title) {
+			const h1 = document.createElement('h1');
+			h1.innerText = opts.title;
+			this.dialog.appendChild(h1);
+		}
+
+		const p = document.createElement('p');
+		p.innerText = msg;
+		this.dialog.appendChild(p);
+
+		document.body.appendChild(this.dialog);
+		this.dialog.showModal();
+	}
+
+	onOpen(_e) {
+		//this.ws.send('Hello, Server!');
+	}
+
+	onError(e) {
+		console.error(e);
+		document.title = 'ERROR';
+		this.showAlert('Connection error. See console for more details.', {
+			title: 'Error',
+		});
+	}
+
+	onClose(_e) {
+		document.title = 'DISCONNECTED';
+		this.showAlert('The connection was broken. Please close the web page.', {
+			title: 'Disconnected',
 		});
 	}
 
