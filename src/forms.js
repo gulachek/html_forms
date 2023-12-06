@@ -8,7 +8,7 @@ window.addEventListener('submit', (e) => {
 
 	// Form w/o action and default (POST) form. Submit data
 	e.preventDefault(); // don't actually submit
-	const data = new FormData(form);
+	const data = new FormData(form, e.submitter);
 	const params = new URLSearchParams(data);
 
 	const xhr = new XMLHttpRequest();
