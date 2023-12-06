@@ -37,6 +37,11 @@ struct upload_file {
   std::string mime_type;
 };
 
+template <typename Fn, typename Class>
+concept member_fn_of =
+    std::is_member_function_pointer_v<Fn> &&
+    requires(Fn fp, Class *inst) { std::bind_front(fp, inst); };
+
 class catui_connection : public std::enable_shared_from_this<catui_connection>,
                          public http_session {
   using self = catui_connection;
@@ -53,9 +58,10 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
 
   std::shared_ptr<my::ws_stream> ws_;
 
-  template <typename... FnArgs>
-  auto bind(void (catui_connection::*fn)(FnArgs...)) {
-    return std::bind_front(fn, shared_from_this());
+  template <member_fn_of<self> Fn, typename... FnArgs>
+  auto bind(Fn &&fn, FnArgs &&...args) {
+    return std::bind_front(fn, shared_from_this(),
+                           std::forward<FnArgs>(args)...);
   }
 
 public:
@@ -226,10 +232,9 @@ private:
       }
 
       std::cerr << "Initiating post with body: " << req.body() << std::endl;
-      asio::dispatch(
-          stream_.get_executor(),
-          std::bind(&self::submit_post, shared_from_this(),
-                    std::make_shared<std::string>(std::move(req.body()))));
+      asio::dispatch(stream_.get_executor(),
+                     bind(&self::submit_post, std::make_shared<std::string>(
+                                                  std::move(req.body()))));
 
       my::string_response res{http::status::ok, req.version()};
       res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
@@ -245,13 +250,10 @@ private:
   }
 
   void submit_post(std::shared_ptr<std::string> body) {
-    using namespace std::placeholders;
-
     std::cerr << "Posting body: " << *body << std::endl;
     auto buf = asio::buffer(submit_buf_.data(), HTML_MSG_SIZE);
-    my::async_msgstream_send(
-        stream_, buf, submit_buf_.size(),
-        std::bind(&self::on_submit_post, shared_from_this(), body, _1, _2));
+    my::async_msgstream_send(stream_, buf, submit_buf_.size(),
+                             bind(&self::on_submit_post, body));
   }
 
   void on_submit_post(std::shared_ptr<std::string> body,
@@ -261,12 +263,9 @@ private:
       return;
     }
 
-    using namespace std::placeholders;
-
-    asio::async_write(
-        stream_, asio::buffer(body->data(), body->size()),
-        asio::transfer_exactly(body->size()),
-        std::bind(&self::on_write_form, shared_from_this(), body, _1, _2));
+    asio::async_write(stream_, asio::buffer(body->data(), body->size()),
+                      asio::transfer_exactly(body->size()),
+                      bind(&self::on_write_form, body));
   }
 
   void on_write_form(std::shared_ptr<std::string> body, std::error_code ec,
