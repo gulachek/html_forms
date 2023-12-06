@@ -2,6 +2,8 @@ import { cli, Path } from 'esmakefile';
 import { C, platformCompiler } from 'esmakefile-c';
 import { writeFile, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
+import webpack from 'webpack';
+import { dirname, basename } from 'node:path';
 
 cli((book, opts) => {
 	const c = new C(platformCompiler(), {
@@ -40,9 +42,45 @@ cli((book, opts) => {
 	}
 
 	const formsJs = Path.src('src/forms.js');
+	const formsJsBundle = Path.build('forms.js');
+	let wp;
+
+	book.add(formsJsBundle, [formsJs], (args) => {
+		const [src, bundle] = args.absAll(formsJs, formsJsBundle);
+
+		const config = {
+			entry: src,
+			output: {
+				path: dirname(bundle),
+				filename: basename(bundle),
+			},
+		};
+
+		if (opts.isDevelopment) {
+			config.mode = 'development';
+			config.devtool = 'inline-source-map';
+		}
+
+		wp = wp || webpack(config);
+
+		return new Promise((res) => {
+			wp.run((err, stats) => {
+				err && args.logStream.write(err);
+				args.logStream.write(stats.toString({ colors: true }));
+				if (err || stats.hasErrors()) {
+					res(false);
+				}
+
+				wp.close((closeErr) => {
+					console.error('Closing webpack', closeErr);
+				});
+			});
+		});
+	});
+
 	const formsJsCpp = Path.build('forms_js.cpp');
-	book.add(formsJsCpp, [formsJs], async (args) => {
-		const [cpp, js] = args.absAll(formsJsCpp, formsJs);
+	book.add(formsJsCpp, [formsJsBundle], async (args) => {
+		const [cpp, js] = args.absAll(formsJsCpp, formsJsBundle);
 
 		const buf = await readFile(js);
 		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
