@@ -44,6 +44,9 @@ msgstream_size html_encode_upload(void *data, size_t size, const char *url,
   if (!obj)
     return MSGSTREAM_ERR;
 
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_BEGIN_UPLOAD))
+    return MSGSTREAM_ERR;
+
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
     return MSGSTREAM_ERR;
 
