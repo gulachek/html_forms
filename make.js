@@ -42,22 +42,84 @@ cli((book, opts) => {
 	}
 
 	const formsTs = Path.src('src/forms.ts');
-	const formsJsBundle = Path.build('forms.js');
-	let wp;
+	const browserTs = Path.src('src/browser.ts');
 
-	book.add(formsJsBundle, [formsTs], (args) => {
-		const [src, bundle] = args.absAll(formsTs, formsJsBundle);
+	const wpDir = Path.build('webpack');
+	const formsJsBundle = wpDir.join('forms.js');
+	const browserBundle = wpDir.join('browser.cjs');
+	addWebpack(book, opts, formsTs, formsJsBundle, 'web');
+	addWebpack(book, opts, browserTs, browserBundle, 'electron-main');
+
+	const formsJsCpp = Path.build('forms_js.cpp');
+	book.add(formsJsCpp, [formsJsBundle], async (args) => {
+		const [cpp, js] = args.absAll(formsJsCpp, formsJsBundle);
+
+		const buf = await readFile(js);
+		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
+	});
+
+	const cppServer = c.addExecutable({
+		name: 'server',
+		precompiledHeader: 'include/asio-pch.hpp',
+		privateDefinitions: {
+			...platformDef,
+			BROWSER_EXE: '"npx"',
+			BROWSER_ARGS: `{"electron", "${book.abs(browserBundle)}"}`,
+		},
+		src: [
+			'src/server.cpp',
+			'src/mime_type.cpp',
+			'src/http_listener.cpp',
+			'src/open-url.cpp',
+			'src/my-asio.cpp',
+			'src/my-beast.cpp',
+			formsJsCpp,
+		],
+		link: ['catui-server', htmlLib, 'boost-json', 'boost-filesystem'],
+	});
+
+	const urlTest = c.addExecutable({
+		name: 'url_test',
+		src: ['test/url_test.cpp'],
+		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
+	});
+
+	const test = Path.build('test');
+	book.add(test, [urlTest], (args) => {
+		return args.spawn(args.abs(urlTest));
+	});
+
+	const cmds = c.addCompileCommands();
+
+	book.add('all', [client, cppServer, cmds, test, browserBundle]);
+
+	book.add(config, async (args) => {
+		const [cfg, srv] = args.absAll(config, cppServer);
+		await writeFile(
+			cfg,
+			JSON.stringify({
+				exec: [srv, '3838'],
+			}),
+			'utf8',
+		);
+	});
+});
+
+function addWebpack(book, opts, srcPath, outPath, target) {
+	book.add(outPath, [srcPath], (args) => {
+		const [src, out] = args.absAll(srcPath, outPath);
 
 		const config = {
 			entry: src,
 			output: {
-				path: dirname(bundle),
-				filename: basename(bundle),
+				path: dirname(out),
+				filename: basename(out),
 			},
+			target,
 			module: {
 				rules: [
 					{
-						test: /\.tsx?$/,
+						test: /\.ts$/,
 						use: 'ts-loader',
 						exclude: /node_modules/,
 					},
@@ -73,7 +135,7 @@ cli((book, opts) => {
 			config.devtool = 'inline-source-map';
 		}
 
-		wp = wp || webpack(config);
+		const wp = webpack(config);
 
 		return new Promise((res) => {
 			wp.run((err, stats) => {
@@ -94,57 +156,7 @@ cli((book, opts) => {
 			});
 		});
 	});
-
-	const formsJsCpp = Path.build('forms_js.cpp');
-	book.add(formsJsCpp, [formsJsBundle], async (args) => {
-		const [cpp, js] = args.absAll(formsJsCpp, formsJsBundle);
-
-		const buf = await readFile(js);
-		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
-	});
-
-	const cppServer = c.addExecutable({
-		name: 'server',
-		precompiledHeader: 'include/asio-pch.hpp',
-		privateDefinitions: { ...platformDef },
-		src: [
-			'src/server.cpp',
-			'src/mime_type.cpp',
-			'src/http_listener.cpp',
-			'src/open-url.cpp',
-			'src/my-asio.cpp',
-			'src/my-beast.cpp',
-			formsJsCpp,
-		],
-		link: ['catui-server', htmlLib, 'boost-json'],
-	});
-
-	const urlTest = c.addExecutable({
-		name: 'url_test',
-		src: ['test/url_test.cpp'],
-		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
-	});
-
-	const test = Path.build('test');
-	book.add(test, [urlTest], (args) => {
-		return args.spawn(args.abs(urlTest));
-	});
-
-	const cmds = c.addCompileCommands();
-
-	book.add('all', [client, cppServer, cmds, test]);
-
-	book.add(config, async (args) => {
-		const [cfg, srv] = args.absAll(config, cppServer);
-		await writeFile(
-			cfg,
-			JSON.stringify({
-				exec: [srv, '3838'],
-			}),
-			'utf8',
-		);
-	});
-});
+}
 
 function bufToCppArray(identifier, buf) {
 	const array = `${identifier}_array__`;

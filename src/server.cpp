@@ -28,6 +28,7 @@ namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace json = boost::json;
+namespace bp = boost::process;
 
 using asio::ip::tcp;
 
@@ -226,6 +227,7 @@ private:
 
       std::cerr << "Initiating post with body: " << req.body() << std::endl;
       asio::dispatch(
+          stream_.get_executor(),
           std::bind(&self::submit_post, shared_from_this(),
                     std::make_shared<std::string>(std::move(req.body()))));
 
@@ -379,6 +381,16 @@ int main(int argc, char *argv[]) {
   }
   auto const address = asio::ip::make_address("127.0.0.1");
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
+
+  auto browser_exe = bp::search_path(BROWSER_EXE);
+  std::vector<std::string> browser_args = BROWSER_ARGS;
+  /*
+bp::child browser{bp::search_path(BROWSER_EXE), browser_args};
+browser.wait();
+  */
+  std::cerr << "Starting " << browser_exe << std::endl;
+  bp::system(browser_exe, browser_args);
+
   // The io_context is required for all I/O
   asio::io_context ioc{};
 

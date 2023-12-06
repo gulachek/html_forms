@@ -1,7 +1,9 @@
 {
 	"type": "module",
+	"main": "build/browser.js",
 	"devDependencies": {
 		"@types/node": "^20.8.10",
+		"electron": "^28.0.0",
 		"eslint": "^8.52.0",
 		"esmakefile": "^0.5.2",
 		"esmakefile-c": "^0.3.1",
