@@ -73,6 +73,7 @@ cli((book, opts) => {
 			'src/open-url.cpp',
 			'src/my-asio.cpp',
 			'src/my-beast.cpp',
+			'src/browser.cpp',
 			formsJsCpp,
 		],
 		link: ['catui-server', htmlLib, 'boost-json', 'boost-filesystem'],

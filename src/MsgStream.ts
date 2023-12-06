@@ -1,5 +1,5 @@
 import { Readable, Writable } from 'node:stream';
-import { readn } from './AsyncReadStream.js';
+import { readn } from './AsyncReadStream';
 
 export async function send(
 	stream: Writable,

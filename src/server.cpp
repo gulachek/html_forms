@@ -13,6 +13,7 @@
 //
 //------------------------------------------------------------------------------
 #include "asio-pch.hpp"
+#include "browser.hpp"
 #include "catui.h"
 #include "html-forms.h"
 #include "http_listener.hpp"
@@ -28,7 +29,6 @@ namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace json = boost::json;
-namespace bp = boost::process;
 
 using asio::ip::tcp;
 
@@ -54,7 +54,8 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::vector<std::uint8_t> submit_buf_;
   beast::flat_buffer ws_buf_;
   std::string ws_send_buf_;
-  bool has_begun_web_page_;
+  browser &browser_;
+  std::optional<browser::window_id> window_id_;
 
   std::shared_ptr<my::ws_stream> ws_;
 
@@ -66,8 +67,8 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
 
 public:
   catui_connection(my::stream_descriptor &&stream,
-                   const std::shared_ptr<http_listener> &http)
-      : stream_{std::move(stream)}, http_{http}, has_begun_web_page_{false} {}
+                   const std::shared_ptr<http_listener> &http, browser &browsr)
+      : stream_{std::move(stream)}, http_{http}, browser_{browsr} {}
 
   ~catui_connection() { http_->remove_session(session_id_); }
 
@@ -352,9 +353,9 @@ private:
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     std::cerr << "Opening " << os.str() << std::endl;
 
-    if (has_begun_web_page_) {
+    if (window_id_) {
       // TODO - needs to account for reconnect across
-      // navigation
+      // navigation / missing ws
       json::object navigate;
       navigate["type"] = "navigate";
       navigate["href"] = os.str();
@@ -362,11 +363,19 @@ private:
       my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
                          bind(&self::on_ws_write));
     } else {
-      has_begun_web_page_ = true;
-      open_url(os.str());
+      browser_.async_load_url(os.str(), bind(&self::on_load_url));
     }
 
     do_recv();
+  }
+
+  void on_load_url(std::error_condition ec, browser::window_id window_id) {
+    if (ec) {
+      std::cerr << "Error opening window: " << ec.message() << std::endl;
+      return;
+    }
+
+    window_id_ = window_id;
   }
 };
 
@@ -381,17 +390,10 @@ int main(int argc, char *argv[]) {
   auto const address = asio::ip::make_address("127.0.0.1");
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
 
-  auto browser_exe = bp::search_path(BROWSER_EXE);
-  std::vector<std::string> browser_args = BROWSER_ARGS;
-  /*
-bp::child browser{bp::search_path(BROWSER_EXE), browser_args};
-browser.wait();
-  */
-  std::cerr << "Starting " << browser_exe << std::endl;
-  bp::system(browser_exe, browser_args);
-
   // The io_context is required for all I/O
   asio::io_context ioc{};
+
+  browser browsr{ioc};
 
   // Create and launch a listening port
   auto http =
@@ -403,7 +405,7 @@ browser.wait();
     return EXIT_FAILURE;
   }
 
-  std::thread th{[&ioc, lb, http]() {
+  std::thread th{[&ioc, lb, http, &browsr]() {
     while (true) {
       int client = catui_server_accept(lb, stderr);
       if (client < 0) {
@@ -413,7 +415,7 @@ browser.wait();
       }
 
       auto con = std::make_shared<catui_connection>(
-          my::stream_descriptor{asio::make_strand(ioc), client}, http);
+          my::stream_descriptor{asio::make_strand(ioc), client}, http, browsr);
 
       con->run();
     }
