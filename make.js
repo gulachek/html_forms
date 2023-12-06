@@ -65,14 +65,19 @@ cli((book, opts) => {
 
 		return new Promise((res) => {
 			wp.run((err, stats) => {
+				const statsJson = stats.toJson();
+				statsJson.modules.forEach((mod) => {
+					if (mod.nameForCondition) {
+						args.addPostreq(mod.nameForCondition);
+					}
+				});
+
 				err && args.logStream.write(err);
 				args.logStream.write(stats.toString({ colors: true }));
-				if (err || stats.hasErrors()) {
-					res(false);
-				}
+				res(!(err || stats.hasErrors()));
 
 				wp.close((closeErr) => {
-					console.error('Closing webpack', closeErr);
+					console.error('Error closing webpack', closeErr);
 				});
 			});
 		});
