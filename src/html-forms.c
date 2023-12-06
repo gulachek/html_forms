@@ -8,27 +8,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/*
-enum msg_type { HTML_BEGIN_UPLOAD = 0, HTML_PROMPT = 1 };
-
-struct begin_upload {
-  char url[HTML_URL_SIZE];
-  size_t content_length;
-  char mime_type[HTML_MIME_SIZE];
-};
-
-struct prompt {
-  char url[HTML_URL_SIZE];
-};
-
-struct html_msg {
-  enum msg_type type;
-  union {
-    struct begin_upload upload;
-    struct prompt prompt;
-  } msg;
-};
-*/
 int html_connect(FILE *err) {
   return catui_connect("com.gulachek.html-forms", "0.1.0", err);
 }
@@ -101,13 +80,29 @@ int html_upload(msgstream_fd fd, const char *url, const char *file_path,
   return stats.st_size;
 }
 
-msgstream_size html_encode_prompt(void *data, size_t size, const char *url) {
-  return -1;
+msgstream_size html_encode_navigate(void *data, size_t size, const char *url) {
+  // url: string
+
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_NAVIGATE))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddStringToObject(obj, "url", url))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return MSGSTREAM_ERR;
+
+  cJSON_Delete(obj);
+  return strlen(data);
 }
 
-int html_prompt(msgstream_fd fd, const char *url) {
+int html_navigate(msgstream_fd fd, const char *url) {
   char buf[HTML_MSG_SIZE];
-  msgstream_size n = html_encode_prompt(buf, sizeof(buf), url);
+  msgstream_size n = html_encode_navigate(buf, sizeof(buf), url);
   if (n < 0)
     return n;
 
@@ -151,14 +146,15 @@ static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   return 1;
 }
 
-static int html_decode_prompt_msg(cJSON *obj, struct prompt *msg) {
+static int html_decode_navigate_msg(cJSON *obj, struct navigate *msg) {
   if (!copy_string(obj, "url", msg->url, sizeof(msg->url)))
     return 0;
 
   return 1;
 }
 
-int html_decode_msg(const void *data, size_t size, struct html_msg *msg) {
+int html_decode_out_msg(const void *data, size_t size,
+                        struct html_out_msg *msg) {
   // TODO error message for failure conditions
 
   cJSON *obj = cJSON_ParseWithLength((const char *)data, size);
@@ -177,9 +173,86 @@ int html_decode_msg(const void *data, size_t size, struct html_msg *msg) {
   if (type_val == HTML_BEGIN_UPLOAD) {
     msg->type = HTML_BEGIN_UPLOAD;
     ret = html_decode_upload_msg(obj, &msg->msg.upload);
-  } else if (type_val == HTML_PROMPT) {
-    msg->type = HTML_PROMPT;
-    ret = html_decode_prompt_msg(obj, &msg->msg.prompt);
+  } else if (type_val == HTML_NAVIGATE) {
+    msg->type = HTML_NAVIGATE;
+    ret = html_decode_navigate_msg(obj, &msg->msg.navigate);
+  } else {
+    goto fail;
+  }
+
+  cJSON_Delete(obj);
+  return ret;
+
+fail:
+  cJSON_Delete(obj);
+  return 0;
+}
+
+int HTML_API html_encode_submit_form(void *data, size_t size,
+                                     size_t content_length,
+                                     const char *mime_type) {
+  // mime: string
+  // size: number
+
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_SUBMIT_FORM))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "size", content_length))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddStringToObject(obj, "mime", mime_type))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return MSGSTREAM_ERR;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
+static int html_decode_submit_form_msg(cJSON *obj,
+                                       struct html_begin_submit_form *msg) {
+  // mime: string
+  // size: number
+  if (!copy_string(obj, "mime", msg->mime_type, sizeof(msg->mime_type)))
+    return 0;
+
+  cJSON *size = cJSON_GetObjectItem(obj, "size");
+  if (!(size && cJSON_IsNumber(size)))
+    return 0;
+  double size_val = cJSON_GetNumberValue(size);
+  if (size_val < 0)
+    return 0;
+  msg->content_length = (size_t)size_val;
+  if (msg->content_length != size_val)
+    return 0;
+
+  return 1;
+}
+
+int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
+  // TODO error message for failure conditions
+
+  cJSON *obj = cJSON_ParseWithLength((const char *)data, size);
+  if (!obj) {
+    goto fail;
+  }
+
+  cJSON *type = cJSON_GetObjectItem(obj, "type");
+  if (!(type && cJSON_IsNumber(type))) {
+    goto fail;
+  }
+
+  int ret = 0;
+  double type_val = cJSON_GetNumberValue(type);
+
+  if (type_val == HTML_SUBMIT_FORM) {
+    msg->type = HTML_SUBMIT_FORM;
+    ret = html_decode_submit_form_msg(obj, &msg->msg.form);
   } else {
     goto fail;
   }
@@ -323,4 +396,38 @@ int html_parse_target(const char *target, char *session_id,
 
   normalized_path[norm_path_n] = '\0';
   return 1;
+}
+
+int HTML_API html_read_form(msgstream_fd fd, void *data, size_t size) {
+  uint8_t buf[HTML_MSG_SIZE];
+  msgstream_size n = msgstream_recv(fd, buf, sizeof(buf), NULL);
+  if (n < 0)
+    return n;
+
+  struct html_in_msg msg;
+  if (!html_decode_in_msg(buf, n, &msg))
+    return MSGSTREAM_ERR;
+
+  if (msg.type != HTML_SUBMIT_FORM)
+    return MSGSTREAM_ERR;
+
+  struct html_begin_submit_form *form = &msg.msg.form;
+  if (strcmp(form->mime_type, "application/x-www-form-urlencoded") != 0) {
+    return MSGSTREAM_ERR;
+  }
+
+  if (form->content_length + 1 > size)
+    return MSGSTREAM_ERR;
+
+  int nread = 0;
+  while (nread < form->content_length) {
+    ssize_t ret = read(fd, data + nread, form->content_length - nread);
+    if (ret < 1)
+      return MSGSTREAM_ERR;
+
+    nread += ret;
+  }
+
+  ((char *)data)[nread] = '\0';
+  return nread;
 }
