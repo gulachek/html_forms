@@ -41,18 +41,30 @@ cli((book, opts) => {
 			break;
 	}
 
-	const formsJs = Path.src('src/forms.js');
+	const formsTs = Path.src('src/forms.ts');
 	const formsJsBundle = Path.build('forms.js');
 	let wp;
 
-	book.add(formsJsBundle, [formsJs], (args) => {
-		const [src, bundle] = args.absAll(formsJs, formsJsBundle);
+	book.add(formsJsBundle, [formsTs], (args) => {
+		const [src, bundle] = args.absAll(formsTs, formsJsBundle);
 
 		const config = {
 			entry: src,
 			output: {
 				path: dirname(bundle),
 				filename: basename(bundle),
+			},
+			module: {
+				rules: [
+					{
+						test: /\.tsx?$/,
+						use: 'ts-loader',
+						exclude: /node_modules/,
+					},
+				],
+			},
+			resolve: {
+				extensions: ['.ts', '.js'],
 			},
 		};
 

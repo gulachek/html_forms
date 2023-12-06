@@ -6,8 +6,9 @@
 		"esmakefile": "^0.5.2",
 		"esmakefile-c": "^0.3.1",
 		"prettier": "^3.0.3",
+		"ts-loader": "^9.5.1",
 		"tsc": "^2.0.4",
-		"typescript": "^5.2.2",
+		"typescript": "^5.3.2",
 		"webpack": "^5.89.0"
 	}
 }

@@ -1,5 +1,5 @@
 window.addEventListener('submit', (e) => {
-	const form = e.target;
+	const form = e.target as HTMLFormElement;
 	if (!form) return;
 	if (form.hasAttribute('action')) return;
 
@@ -9,7 +9,7 @@ window.addEventListener('submit', (e) => {
 	// Form w/o action and default (POST) form. Submit data
 	e.preventDefault(); // don't actually submit
 	const data = new FormData(form, e.submitter);
-	const params = new URLSearchParams(data);
+	const params = new URLSearchParams(data as any);
 
 	const xhr = new XMLHttpRequest();
 	xhr.open('POST', '~/submit');
@@ -17,9 +17,13 @@ window.addEventListener('submit', (e) => {
 	xhr.send(params.toString());
 });
 
+interface IShowAlertOpts {
+	title?: string;
+}
+
 class Connection {
-	ws;
-	dialog;
+	ws: WebSocket;
+	dialog: HTMLDialogElement;
 
 	constructor() {}
 
@@ -49,7 +53,7 @@ class Connection {
 		});
 	}
 
-	showAlert(msg, opts) {
+	showAlert(msg: string, opts?: IShowAlertOpts) {
 		if (this.dialog) {
 			document.body.removeChild(this.dialog);
 		}
@@ -72,11 +76,11 @@ class Connection {
 		this.dialog.showModal();
 	}
 
-	onOpen(_e) {
+	onOpen(_e: Event) {
 		//this.ws.send('Hello, Server!');
 	}
 
-	onError(e) {
+	onError(e: Event) {
 		console.error(e);
 		document.title = 'ERROR';
 		this.showAlert('Connection error. See console for more details.', {
@@ -84,14 +88,14 @@ class Connection {
 		});
 	}
 
-	onClose(_e) {
+	onClose(_e: Event) {
 		document.title = 'DISCONNECTED';
 		this.showAlert('The connection was broken. Please close the web page.', {
 			title: 'Disconnected',
 		});
 	}
 
-	onMessage(e) {
+	onMessage(e: MessageEvent) {
 		let obj;
 		try {
 			obj = JSON.parse(e.data);
