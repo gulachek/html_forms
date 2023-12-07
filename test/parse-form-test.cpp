@@ -63,12 +63,11 @@ struct f {
 
     BOOST_TEST(std::string_view{measured_value} == expected_value);
   }
-};
 
-BOOST_FIXTURE_TEST_CASE(TODO_EmptyForm, f) {
-  // not implemented
-  BOOST_TEST(true);
-}
+  std::string_view name(int i) { return html_form_field_name(form_, i); }
+
+  std::string_view value(int i) { return html_form_field_value(form_, i); }
+};
 
 BOOST_FIXTURE_TEST_CASE(SingleParameter, f) {
   int ret = recv("response=hello");
@@ -105,4 +104,16 @@ BOOST_FIXTURE_TEST_CASE(ParsesMultipleValues, f) {
   chk("apple", "red");
   chk("banana", "yellow");
   chk("pear", "greenish  yellow");
+}
+
+BOOST_FIXTURE_TEST_CASE(EmptyForm, f) {
+  int ret = recv("");
+  BOOST_TEST(ret == 0);
+}
+
+BOOST_FIXTURE_TEST_CASE(EmptyField, f) {
+  int ret = recv("first=1&&third=3");
+  BOOST_TEST(ret == 3);
+  BOOST_TEST(name(1) == "");
+  BOOST_TEST(value(1) == "");
 }

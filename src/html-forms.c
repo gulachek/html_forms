@@ -515,20 +515,20 @@ static int parse_field(char *buf, size_t size, int offset,
         name_end = i;
       else
         return -1; // unexpected to have multiple = in field
-    }
-
-    if (buf[i] == '&') {
+    } else if (buf[i] == '&') {
       field_end = i;
       break;
     }
   }
 
-  if (name_end == -1)
-    name_end = field_end;
-
   int field_size = field_end - offset;
+  int value_pct_size = field_end - name_end - 1; // magic 1 is for '='
+  if (name_end == -1) {
+    name_end = field_end;
+    value_pct_size = 0;
+  }
+
   int name_pct_size = name_end - offset;
-  int value_pct_size = field_size - name_pct_size - 1; // magic 1 is for '='
   const char *name_start = buf + offset;
   const char *val_start = buf + field_end - value_pct_size;
 
