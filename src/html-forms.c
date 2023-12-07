@@ -3,6 +3,7 @@
 
 #include <catui.h>
 #include <cjson/cJSON.h>
+#include <ctype.h>
 #include <string.h>
 
 #include <sys/stat.h>
@@ -398,7 +399,7 @@ int html_parse_target(const char *target, char *session_id,
   return 1;
 }
 
-int HTML_API html_read_form(msgstream_fd fd, void *data, size_t size) {
+static int html_read_form_data(msgstream_fd fd, void *data, size_t size) {
   uint8_t buf[HTML_MSG_SIZE];
   msgstream_size n = msgstream_recv(fd, buf, sizeof(buf), NULL);
   if (n < 0)
@@ -430,4 +431,192 @@ int HTML_API html_read_form(msgstream_fd fd, void *data, size_t size) {
 
   ((char *)data)[nread] = '\0';
   return nread;
+}
+
+struct html_form_field {
+  char *name;
+  char *value;
+};
+
+struct html_form_ {
+  size_t size;
+  struct html_form_field *fields;
+};
+
+static int is_valid_pct_char(const char *buf, int size, int offset) {
+  return (size - offset >= 3) && (buf[offset] == '%') &&
+         ishexnumber(buf[offset + 1]) && ishexnumber(buf[offset + 2]);
+}
+
+static int hexval(char c) {
+  if (isdigit(c))
+    return c - '0';
+
+  if (islower(c))
+    return (c - 'a') + 10;
+
+  if (isupper(c))
+    return (c - 'A') + 10;
+
+  return -1;
+}
+
+// ASSUMES AT LEAST 2 BYTES
+static char hexbyte(const char *str) {
+  union {
+    unsigned char u;
+    char c;
+  } val;
+  val.u = (hexval(str[0]) << 4) | hexval(str[1]);
+  return val.c;
+}
+
+static char *percent_decode(const char *buf, size_t size) {
+  int decoded_size = 0;
+  for (int i = 0; i < size; ++i) {
+    if (buf[i] == '%') {
+      if (!is_valid_pct_char(buf, size, i))
+        return NULL;
+
+      i += 2;
+    }
+
+    decoded_size += 1;
+  }
+
+  char *decoded = malloc(decoded_size + 1);
+  if (!decoded)
+    return NULL;
+
+  int di = 0;
+  for (int i = 0; i < size; ++i) {
+    if (buf[i] == '+') {
+      decoded[di] = ' ';
+    } else if (buf[i] == '%') {
+      decoded[di] = hexbyte(buf + i + 1);
+      i += 2;
+    } else {
+      decoded[di] = buf[i];
+    }
+
+    ++di;
+  }
+
+  decoded[decoded_size] = '\0';
+  return decoded;
+}
+
+static int parse_field(char *buf, size_t size, int offset,
+                       struct html_form_field *field) {
+  int field_end = size, name_end = -1;
+  for (int i = offset; i < size; ++i) {
+    if (buf[i] == '=') {
+      if (name_end == -1)
+        name_end = i;
+      else
+        return 0; // unexpected to have multiple = in field
+    }
+
+    if (buf[i] == '&') {
+      field_end = i;
+      break;
+    }
+  }
+
+  if (name_end == -1)
+    name_end = field_end;
+
+  int field_size = field_end - offset;
+  int name_pct_size = name_end - offset;
+  int value_pct_size = field_size - name_pct_size - 1; // magic 1 is for '='
+  const char *name_start = buf + offset;
+  const char *val_start = buf + field_end - value_pct_size;
+
+  if (!(field->name = percent_decode(name_start, name_pct_size)))
+    return 0;
+
+  if (!(field->value = percent_decode(val_start, value_pct_size)))
+    return 0;
+
+  return 1;
+}
+
+int html_read_form(msgstream_fd fd, html_form *pform) {
+  char buf[HTML_FORM_SIZE];
+  msgstream_size n = html_read_form_data(fd, buf, sizeof(buf));
+  if (n < 1)
+    return n;
+
+  int nfields = 1;
+  for (int i = 0; i < n; ++i) {
+    if (buf[i] == '&')
+      ++nfields;
+  }
+
+  html_form form;
+  if ((form = malloc(sizeof(struct html_form_))) == NULL)
+    return MSGSTREAM_ERR;
+
+  form->size = nfields;
+  if ((form->fields = calloc(nfields, sizeof(struct html_form_field))) == NULL)
+    return MSGSTREAM_ERR;
+
+  int i = 0;
+  for (int field_i = 0; field_i < nfields; ++field_i) {
+    if (!parse_field(buf, n, i, &form->fields[field_i]))
+      return MSGSTREAM_ERR;
+  }
+
+  *pform = form;
+  return nfields;
+}
+
+void html_form_release(html_form *pform) {
+  if (!pform)
+    return;
+
+  html_form form = *pform;
+  if (!form)
+    return;
+
+  for (size_t i = 0; i < form->size; ++i) {
+    struct html_form_field *field = &form->fields[i];
+    free(field->name);
+    free(field->value);
+  }
+
+  free(form->fields);
+  free(form);
+  *pform = NULL;
+}
+
+size_t html_form_size(const html_form form) {
+  if (!form)
+    return 0;
+  return form->size;
+}
+
+const char *HTML_API html_form_field_name(const html_form form, size_t i) {
+  if (!(form && i < form->size))
+    return NULL;
+  return form->fields[i].name;
+}
+
+const char *HTML_API html_form_field_value(const html_form form, size_t i) {
+  if (!(form && i < form->size))
+    return NULL;
+  return form->fields[i].value;
+}
+
+const char *HTML_API html_form_lookup(const html_form form,
+                                      const char *field_name) {
+  if (!form)
+    return NULL;
+
+  for (size_t i = 0; i < form->size; ++i) {
+    if (strcmp(field_name, form->fields[i].name) == 0)
+      return form->fields[i].value;
+  }
+
+  return NULL;
 }

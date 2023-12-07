@@ -85,9 +85,21 @@ cli((book, opts) => {
 		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
 	});
 
+	const parseFormTest = c.addExecutable({
+		name: 'parse-form-test',
+		src: ['test/parse-form-test.cpp'],
+		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
+	});
+
+	const tests = [urlTest, parseFormTest];
 	const test = Path.build('test');
-	book.add(test, [urlTest], (args) => {
-		return args.spawn(args.abs(urlTest));
+	book.add(test, tests, async (args) => {
+		for (const t of tests) {
+			const success = await args.spawn(args.abs(t));
+			if (!success) return false;
+		}
+
+		return true;
 	});
 
 	const cmds = c.addCompileCommands();

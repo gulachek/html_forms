@@ -22,22 +22,25 @@ int main() {
   if (!html_navigate(fd, "/index.html"))
     return 1;
 
-  html_form_buf buf;
-  if (html_read_form(fd, buf, sizeof(buf)) < 0) {
+  html_form form;
+  if (html_read_form(fd, &form) < 0) {
     return 1;
   }
 
-  printf("Read form: %s\n", buf);
+  printf("Response: %s\n", html_form_lookup(form, "response"));
 
   if (!html_navigate(fd, "/other.html")) {
     return 1;
   }
 
-  if (html_read_form(fd, buf, sizeof(buf)) < 0) {
+  // TODO - should auto release
+  html_form_release(&form);
+
+  if (html_read_form(fd, &form) < 0) {
     return 1;
   }
 
-  printf("Read form: %s\n", buf);
+  printf("Response: %s\n", html_form_lookup(form, "action"));
 
   return 0;
 }

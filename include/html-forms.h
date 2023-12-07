@@ -42,12 +42,12 @@ struct html_out_msg {
   } msg;
 };
 
+enum html_in_msg_type { HTML_SUBMIT_FORM = 0 };
+
 struct html_begin_submit_form {
   size_t content_length;
   html_mime_buf mime_type;
 };
-
-enum html_in_msg_type { HTML_SUBMIT_FORM = 0 };
 
 struct html_in_msg {
   enum html_in_msg_type type;
@@ -81,10 +81,20 @@ int HTML_API html_encode_submit_form(void *data, size_t size,
                                      size_t content_length,
                                      const char *mime_type);
 
+struct html_form_;
+typedef struct html_form_ *html_form;
+
 /**
  * Read a application/x-www-form-urlencoded form
  */
-int HTML_API html_read_form(msgstream_fd fd, void *data, size_t size);
+int HTML_API html_read_form(msgstream_fd fd, html_form *form_ptr);
+void HTML_API html_form_release(html_form *form_ptr);
+
+size_t HTML_API html_form_size(const html_form form);
+const char *HTML_API html_form_field_name(const html_form form, size_t i);
+const char *HTML_API html_form_field_value(const html_form form, size_t i);
+const char *HTML_API html_form_lookup(const html_form form,
+                                      const char *field_name);
 
 int HTML_API html_parse_target(const char *target, char *session_id,
                                size_t session_id_len, char *normalized_path,
