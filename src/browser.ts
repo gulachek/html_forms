@@ -11,16 +11,18 @@ interface OpenMessage {
 	windowId: number;
 }
 
-type OutputMessage = OpenMessage;
+interface CloseMessage {
+	type: 'close';
+	windowId: number;
+}
+
+type OutputMessage = OpenMessage | CloseMessage;
 
 // work w/ async io
 process.stdin.pause();
 
 app.whenReady().then(async () => {
 	const decoder = new TextDecoder();
-
-	const main = new BrowserWindow();
-	main.loadURL('https://gulachek.com');
 
 	while (true) {
 		const msg = await recv(process.stdin, BUF_SIZE);
@@ -33,7 +35,12 @@ app.whenReady().then(async () => {
 			const win = new BrowserWindow();
 			windows.set(windowId, win);
 			win.loadURL(url);
-			win.title = 'Testing!';
+		} else if (jobj.type === 'close') {
+			const { windowId } = jobj;
+			const win = windows.get(windowId);
+			if (!win) return;
+			win.destroy();
+			windows.delete(windowId);
 		}
 	}
 });

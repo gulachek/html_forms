@@ -133,7 +133,7 @@ private:
   void on_ack(std::error_condition ec, msgstream_size n) {
     if (ec) {
       std::cerr << "Error sending ack: " << ec.message() << std::endl;
-      return;
+      return end_catui();
     }
 
     buf_.resize(HTML_MSG_SIZE);
@@ -148,7 +148,7 @@ private:
     if (ec) {
       std::cerr << "Error receiving html message: " << ec.message()
                 << std::endl;
-      return;
+      return end_catui();
     }
 
     struct html_out_msg msg;
@@ -180,7 +180,22 @@ private:
     do_ws_read();
   }
 
-  void end_ws() { ws_ = nullptr; }
+  void end_ws() {
+    if (!ws_)
+      return;
+
+    ws_ = nullptr;
+  }
+
+  void end_catui() {
+    stream_.close();
+
+    if (window_id_) {
+      browser_.async_close_window(*window_id_, bind(&self::on_close_window));
+    }
+  }
+
+  void on_close_window(std::error_condition ec) {}
 
   void do_ws_read() {
     if (!ws_) {
@@ -261,7 +276,7 @@ private:
                       std::error_condition ec, msgstream_size n) {
     if (ec) {
       std::cerr << "Error sending form to app: " << ec.message() << std::endl;
-      return;
+      return end_catui();
     }
 
     asio::async_write(stream_, asio::buffer(body->data(), body->size()),
@@ -274,7 +289,7 @@ private:
     if (ec) {
       std::cerr << "Error sending form contents to app: " << ec.message()
                 << std::endl;
-      return;
+      return end_catui();
     }
   }
 

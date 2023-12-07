@@ -6,6 +6,7 @@ namespace asio = boost::asio;
 namespace json = boost::json;
 
 using load_url_handler = browser::load_url_handler;
+using close_window_handler = browser::close_window_handler;
 
 #define BUF_SIZE 2048
 
@@ -14,6 +15,19 @@ browser::browser(asio::io_context &ioc)
       next_window_id_{1} {
   argv_ = BROWSER_ARGS;
   in_buf_.resize(BUF_SIZE);
+}
+
+void browser::send_msg(
+    const json::object &obj,
+    const std::function<void(std::error_condition, msgstream_size)> &cb) {
+  out_buf_ = json::serialize(obj);
+  if (out_buf_.size() > BUF_SIZE) {
+    cb(std::make_error_condition(std::errc::no_buffer_space), -1);
+    return;
+  }
+
+  async_msgstream_send(stdin_, asio::buffer(out_buf_.data(), BUF_SIZE),
+                       out_buf_.size(), cb);
 }
 
 void browser::async_load_url(const std::string_view &url,
@@ -27,15 +41,8 @@ void browser::async_load_url(const std::string_view &url,
   obj["type"] = "open";
   obj["url"] = url;
   obj["windowId"] = window;
-  out_buf_ = json::serialize(obj);
-  if (out_buf_.size() > BUF_SIZE) {
-    cb(std::make_error_condition(std::errc::no_buffer_space), -1);
-    return;
-  }
 
-  async_msgstream_send(stdin_, asio::buffer(out_buf_.data(), BUF_SIZE),
-                       out_buf_.size(),
-                       std::bind_front(&browser::on_write_url, this, window));
+  send_msg(obj, std::bind_front(&browser::on_write_url, this, window));
 }
 
 void browser::on_write_url(window_id window, std::error_condition ec,
@@ -45,23 +52,23 @@ void browser::on_write_url(window_id window, std::error_condition ec,
     return;
 
   auto &cb = node.mapped();
+  cb(ec, window);
+}
 
-  if (ec) {
-    cb(ec, window);
-    return;
-  }
+void browser::async_close_window(
+    window_id window, const std::function<close_window_handler> &cb) {
+  if (!proc_)
+    cb(std::error_condition{});
 
-  cb(std::error_condition{}, window);
+  json::object obj;
+  obj["type"] = "close";
+  obj["windowId"] = window;
+
+  send_msg(obj, [cb](std::error_condition ec, msgstream_size n) { cb(ec); });
 }
 
 std::shared_ptr<bp::child> browser::proc() {
   if (!proc_) {
-    std::cerr << exe_;
-    for (auto arg : argv_) {
-      std::cerr << ' ' << arg;
-    }
-    std::cerr << std::endl;
-
     proc_ = std::make_shared<bp::child>(
         exe_, argv_, bp::std_in<stdin_, bp::std_out> stdout_);
   }

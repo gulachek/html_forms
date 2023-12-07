@@ -8,6 +8,7 @@ class browser {
 public:
   using window_id = int;
   using load_url_handler = void(std::error_condition, window_id);
+  using close_window_handler = void(std::error_condition);
 
   browser(boost::asio::io_context &ioc);
 
@@ -15,13 +16,17 @@ public:
                       const std::function<load_url_handler> &cb);
 
   void async_close_window(window_id id,
-                          const std::function<void(std::error_condition)> &cb);
+                          const std::function<close_window_handler> &cb);
 
 private:
   std::shared_ptr<boost::process::child> proc();
 
   void on_write_url(window_id window, std::error_condition ec,
                     msgstream_size n);
+
+  void
+  send_msg(const boost::json::object &obj,
+           const std::function<void(std::error_condition, msgstream_size)> &cb);
 
   std::shared_ptr<boost::process::child> proc_;
   boost::process::filesystem::path exe_;
