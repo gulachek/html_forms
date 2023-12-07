@@ -43,7 +43,7 @@ struct f {
   }
 
   std::string_view val(const char *name) {
-    return html_form_lookup(form_, name);
+    return html_form_value_of(form_, name);
   }
 };
 

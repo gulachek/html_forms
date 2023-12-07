@@ -27,7 +27,7 @@ int main() {
     return 1;
   }
 
-  printf("Response: %s\n", html_form_lookup(form, "response"));
+  printf("Response: %s\n", html_form_value_of(form, "response"));
 
   if (!html_navigate(fd, "/other.html")) {
     return 1;
@@ -40,7 +40,7 @@ int main() {
     return 1;
   }
 
-  printf("Response: %s\n", html_form_lookup(form, "action"));
+  printf("Response: %s\n", html_form_value_of(form, "action"));
 
   return 0;
 }

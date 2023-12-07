@@ -608,8 +608,8 @@ const char *HTML_API html_form_field_value(const html_form form, size_t i) {
   return form->fields[i].value;
 }
 
-const char *HTML_API html_form_lookup(const html_form form,
-                                      const char *field_name) {
+const char *HTML_API html_form_value_of(const html_form form,
+                                        const char *field_name) {
   if (!form)
     return NULL;
 

@@ -93,8 +93,8 @@ void HTML_API html_form_release(html_form *form_ptr);
 size_t HTML_API html_form_size(const html_form form);
 const char *HTML_API html_form_field_name(const html_form form, size_t i);
 const char *HTML_API html_form_field_value(const html_form form, size_t i);
-const char *HTML_API html_form_lookup(const html_form form,
-                                      const char *field_name);
+const char *HTML_API html_form_value_of(const html_form form,
+                                        const char *field_name);
 
 int HTML_API html_parse_target(const char *target, char *session_id,
                                size_t session_id_len, char *normalized_path,
