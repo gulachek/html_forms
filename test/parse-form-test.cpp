@@ -52,6 +52,12 @@ struct f {
     return ret;
   }
 
+  void fail(const std::string_view &sv) {
+    send(sv);
+    int ret = html_read_form(pipe_[0], &form_);
+    BOOST_TEST(ret < 0);
+  }
+
   void chk(const char *name, const char *expected_value) {
     const char *measured_value = html_form_value_of(form_, name);
     if (measured_value == NULL && expected_value != NULL) {
@@ -117,3 +123,21 @@ BOOST_FIXTURE_TEST_CASE(EmptyField, f) {
   BOOST_TEST(name(1) == "");
   BOOST_TEST(value(1) == "");
 }
+
+BOOST_FIXTURE_TEST_CASE(EmptyValueWithEq, f) {
+  int ret = recv("first=1&second=&third=3");
+  BOOST_TEST(ret == 3);
+  chk("second", "");
+}
+
+BOOST_FIXTURE_TEST_CASE(EmptyValueWithoutEq, f) {
+  int ret = recv("first=1&second&third=3");
+  BOOST_TEST(ret == 3);
+  chk("second", "");
+}
+
+// TODO - memory leaks exist in parsing failure
+BOOST_FIXTURE_TEST_CASE(ErrorToHaveMultipleEq, f) { fail("t=1=2"); }
+BOOST_FIXTURE_TEST_CASE(ErrorToHaveInvalidPctChar, f) { fail("t=%2x"); }
+BOOST_FIXTURE_TEST_CASE(ErrorToHaveTruncatedPctChar, f) { fail("t=%2"); }
+BOOST_FIXTURE_TEST_CASE(ErrorToHaveTruncatedPctChar2, f) { fail("t=%"); }
