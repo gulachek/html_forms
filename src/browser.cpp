@@ -1,5 +1,6 @@
 #include "browser.hpp"
 #include "async_msgstream.hpp"
+#include "boost/asio/any_io_executor.hpp"
 
 namespace bp = boost::process;
 namespace asio = boost::asio;
@@ -7,12 +8,13 @@ namespace json = boost::json;
 
 using load_url_handler = browser::load_url_handler;
 using close_window_handler = browser::close_window_handler;
+using lock_ptr = async_mutex<asio::any_io_executor>::lock_ptr;
 
 #define BUF_SIZE 2048
 
 browser::browser(asio::io_context &ioc)
     : exe_{bp::search_path(BROWSER_EXE)}, stdin_{ioc}, stdout_{ioc},
-      next_window_id_{1} {
+      next_window_id_{1}, mtx_{ioc.get_executor()} {
   argv_ = BROWSER_ARGS;
   in_buf_.resize(BUF_SIZE);
 }
@@ -34,19 +36,21 @@ void browser::async_load_url(const std::string_view &url,
                              const std::function<load_url_handler> &cb) {
   proc();
 
-  auto window = next_window_id_++;
-  load_url_handlers_[window] = cb;
+  mtx_.async_lock([this, cb, url = std::string{url}](lock_ptr lock) {
+    auto window = next_window_id_++;
+    load_url_handlers_[window] = cb;
 
-  json::object obj;
-  obj["type"] = "open";
-  obj["url"] = url;
-  obj["windowId"] = window;
+    json::object obj;
+    obj["type"] = "open";
+    obj["url"] = url;
+    obj["windowId"] = window;
 
-  send_msg(obj, std::bind_front(&browser::on_write_url, this, window));
+    send_msg(obj, bind(&browser::on_write_url, window, lock));
+  });
 }
 
-void browser::on_write_url(window_id window, std::error_condition ec,
-                           msgstream_size n) {
+void browser::on_write_url(window_id window, lock_ptr lock,
+                           std::error_condition ec, msgstream_size n) {
   auto node = load_url_handlers_.extract(window);
   if (node.empty())
     return;
@@ -60,11 +64,13 @@ void browser::async_close_window(
   if (!proc_)
     cb(std::error_condition{});
 
-  json::object obj;
-  obj["type"] = "close";
-  obj["windowId"] = window;
+  mtx_.async_lock([this, cb, window](lock_ptr lock) {
+    json::object obj;
+    obj["type"] = "close";
+    obj["windowId"] = window;
 
-  send_msg(obj, [cb](std::error_condition ec, msgstream_size n) { cb(ec); });
+    send_msg(obj, [cb](std::error_condition ec, msgstream_size n) { cb(ec); });
+  });
 }
 
 std::shared_ptr<bp::child> browser::proc() {
