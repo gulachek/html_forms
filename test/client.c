@@ -19,29 +19,38 @@ int main() {
   if (!upload_files(fd))
     return 1;
 
-  if (!html_navigate(fd, "/index.html"))
-    return 1;
+  html_form form = NULL;
 
-  html_form form;
-  if (html_read_form(fd, &form) < 0) {
-    return 1;
+  while (1) {
+    if (!html_navigate(fd, "/index.html"))
+      return 1;
+
+    if (html_read_form(fd, &form) < 0) {
+      return 1;
+    }
+
+    const char *response = html_form_value_of(form, "response");
+    if (strcmp(response, "quit") == 0)
+      break;
+
+    printf("Response: %s\n", html_form_value_of(form, "response"));
+
+    if (!html_navigate(fd, "/other.html")) {
+      return 1;
+    }
+
+    if (html_read_form(fd, &form) < 0) {
+      return 1;
+    }
+
+    const char *action = html_form_value_of(form, "action");
+    if (strcmp(action, "home") != 0) {
+      printf("Quitting with action '%s'\n", action);
+      break;
+    }
   }
 
-  printf("Response: %s\n", html_form_value_of(form, "response"));
-
-  if (!html_navigate(fd, "/other.html")) {
-    return 1;
-  }
-
-  // TODO - should auto release
   html_form_release(&form);
-
-  if (html_read_form(fd, &form) < 0) {
-    return 1;
-  }
-
-  printf("Response: %s\n", html_form_value_of(form, "action"));
-
   return 0;
 }
 

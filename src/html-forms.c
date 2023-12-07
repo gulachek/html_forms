@@ -542,6 +542,12 @@ static int parse_field(char *buf, size_t size, int offset,
 }
 
 int html_read_form(msgstream_fd fd, html_form *pform) {
+  if (!pform)
+    return -1;
+
+  if (*pform)
+    html_form_release(pform);
+
   char buf[HTML_FORM_SIZE];
   msgstream_size n = html_read_form_data(fd, buf, sizeof(buf));
   if (n < 1)
