@@ -52,8 +52,16 @@ struct f {
     return ret;
   }
 
-  std::string_view val(const char *name) {
-    return html_form_value_of(form_, name);
+  void chk(const char *name, const char *expected_value) {
+    const char *measured_value = html_form_value_of(form_, name);
+    if (measured_value == NULL && expected_value != NULL) {
+      std::ostringstream ss;
+      ss << "Expected to find value for field '" << name
+         << "' but no value was found.";
+      BOOST_FAIL(ss.str());
+    }
+
+    BOOST_TEST(std::string_view{measured_value} == expected_value);
   }
 };
 
@@ -65,27 +73,36 @@ BOOST_FIXTURE_TEST_CASE(TODO_EmptyForm, f) {
 BOOST_FIXTURE_TEST_CASE(SingleParameter, f) {
   int ret = recv("response=hello");
 
-  BOOST_REQUIRE(ret == 1);
-  BOOST_TEST(val("response") == "hello");
+  BOOST_TEST(ret == 1);
+  chk("response", "hello");
 }
 
 BOOST_FIXTURE_TEST_CASE(ParsesPlusAsSpace, f) {
   int ret = recv("response=hello+world");
 
-  BOOST_REQUIRE(ret == 1);
-  BOOST_TEST(val("response") == "hello world");
+  BOOST_TEST(ret == 1);
+  chk("response", "hello world");
 }
 
 BOOST_FIXTURE_TEST_CASE(ParsesPercentValue, f) {
   int ret = recv("response=hello%20world");
 
-  BOOST_REQUIRE(ret == 1);
-  BOOST_TEST(val("response") == "hello world");
+  BOOST_TEST(ret == 1);
+  chk("response", "hello world");
 }
 
 BOOST_FIXTURE_TEST_CASE(ParsesMultiplePercentValuesWithHex, f) {
   int ret = recv("t=hey%23there%2a%2Atest%21%21%21%f0%9f%92%a9%F0%9F%92%A9");
 
-  BOOST_REQUIRE(ret == 1);
-  BOOST_TEST(val("t") == "hey#there**test!!!💩💩");
+  BOOST_TEST(ret == 1);
+  chk("t", "hey#there**test!!!💩💩");
+}
+
+BOOST_FIXTURE_TEST_CASE(ParsesMultipleValues, f) {
+  int ret = recv("apple=red&banana=yellow&pear=greenish+%20yellow");
+
+  BOOST_TEST(ret == 3);
+  chk("apple", "red");
+  chk("banana", "yellow");
+  chk("pear", "greenish  yellow");
 }

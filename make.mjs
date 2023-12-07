@@ -92,15 +92,16 @@ cli((book, opts) => {
 	});
 
 	const tests = [urlTest, parseFormTest];
-	const test = Path.build('test');
-	book.add(test, tests, async (args) => {
-		for (const t of tests) {
-			const success = await args.spawn(args.abs(t));
-			if (!success) return false;
-		}
+	const runTests = tests.map((t) => t.dir().join(t.basename + '.run'));
 
-		return true;
-	});
+	for (let i = 0; i < tests.length; ++i) {
+		book.add(runTests[i], [tests[i]], (args) => {
+			return args.spawn(args.abs(tests[i]));
+		});
+	}
+
+	const test = Path.build('test');
+	book.add(test, runTests);
 
 	const cmds = c.addCompileCommands();
 

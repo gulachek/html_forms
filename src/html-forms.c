@@ -514,7 +514,7 @@ static int parse_field(char *buf, size_t size, int offset,
       if (name_end == -1)
         name_end = i;
       else
-        return 0; // unexpected to have multiple = in field
+        return -1; // unexpected to have multiple = in field
     }
 
     if (buf[i] == '&') {
@@ -533,12 +533,12 @@ static int parse_field(char *buf, size_t size, int offset,
   const char *val_start = buf + field_end - value_pct_size;
 
   if (!(field->name = percent_decode(name_start, name_pct_size)))
-    return 0;
+    return -1;
 
   if (!(field->value = percent_decode(val_start, value_pct_size)))
-    return 0;
+    return -1;
 
-  return 1;
+  return field_size;
 }
 
 int html_read_form(msgstream_fd fd, html_form *pform) {
@@ -563,8 +563,11 @@ int html_read_form(msgstream_fd fd, html_form *pform) {
 
   int i = 0;
   for (int field_i = 0; field_i < nfields; ++field_i) {
-    if (!parse_field(buf, n, i, &form->fields[field_i]))
+    int field_size = parse_field(buf, n, i, &form->fields[field_i]);
+    if (field_size < 0)
       return MSGSTREAM_ERR;
+
+    i += field_size + 1; // magic 1 for '&'
   }
 
   *pform = form;
