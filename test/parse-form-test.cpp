@@ -39,6 +39,16 @@ struct f {
     if (ret < 0)
       BOOST_FAIL("Failed to read form");
 
+    // Check consistency of object
+    BOOST_TEST(html_form_size(form_) == ret);
+    for (int i = 0; i < ret; ++i) {
+      const char *name_c = html_form_field_name(form_, i);
+      std::string_view name{name_c};
+      std::string_view value{html_form_field_value(form_, i)};
+
+      BOOST_TEST(value == html_form_value_of(form_, name_c));
+    }
+
     return ret;
   }
 
@@ -71,4 +81,11 @@ BOOST_FIXTURE_TEST_CASE(ParsesPercentValue, f) {
 
   BOOST_REQUIRE(ret == 1);
   BOOST_TEST(val("response") == "hello world");
+}
+
+BOOST_FIXTURE_TEST_CASE(ParsesMultiplePercentValuesWithHex, f) {
+  int ret = recv("t=hey%23there%2a%2Atest%21%21%21%f0%9f%92%a9%F0%9F%92%A9");
+
+  BOOST_REQUIRE(ret == 1);
+  BOOST_TEST(val("t") == "hey#there**test!!!💩💩");
 }
