@@ -47,8 +47,16 @@ cli((book, opts) => {
 	const wpDir = Path.build('webpack');
 	const formsJsBundle = wpDir.join('forms.js');
 	const browserBundle = wpDir.join('browser.cjs');
-	addWebpack(book, opts, formsTs, formsJsBundle, 'web');
-	addWebpack(book, opts, browserTs, browserBundle, 'electron-main');
+	addWebpack(book, opts, formsTs, formsJsBundle, {
+		target: 'web',
+		output: {
+			library: {
+				type: 'var',
+				name: 'HtmlForms',
+			},
+		},
+	});
+	addWebpack(book, opts, browserTs, browserBundle, { target: 'electron-main' });
 
 	const formsJsCpp = Path.build('forms_js.cpp');
 	book.add(formsJsCpp, [formsJsBundle], async (args) => {
@@ -119,17 +127,18 @@ cli((book, opts) => {
 	});
 });
 
-function addWebpack(book, opts, srcPath, outPath, target) {
+function addWebpack(book, opts, srcPath, outPath, baseConfig) {
 	book.add(outPath, [srcPath], (args) => {
 		const [src, out] = args.absAll(srcPath, outPath);
 
 		const config = {
+			...baseConfig,
 			entry: src,
 			output: {
 				path: dirname(out),
 				filename: basename(out),
+				...baseConfig.output,
 			},
-			target,
 			module: {
 				rules: [
 					{

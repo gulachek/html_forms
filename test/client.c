@@ -33,11 +33,15 @@ int main() {
     if (strcmp(response, "quit") == 0)
       break;
 
-    printf("Response: %s\n", html_form_value_of(form, "response"));
+    printf("Response: %s\n", response);
 
     if (!html_navigate(fd, "/other.html")) {
       return 1;
     }
+
+    sleep(1);
+    if (!html_send_js_message(fd, response))
+      return 1;
 
     if (html_read_form(fd, &form) < 0) {
       return 1;
@@ -55,17 +59,20 @@ int main() {
 }
 
 int upload_files(int fd) {
-  if (!html_upload(fd, "/index.html", "./test/index.html", "text/html"))
+  if (html_upload(fd, "/index.html", "./test/index.html", "text/html") < 0)
     return 0;
 
-  if (!html_upload(fd, "/index.css", "./test/index.css", "text/css")) {
+  if (html_upload(fd, "/index.css", "./test/index.css", "text/css") < 0) {
     return 0;
   }
 
-  if (!html_upload(fd, "/favicon.ico", "./test/favicon.ico", "image/x-icon"))
+  if (html_upload(fd, "/favicon.ico", "./test/favicon.ico", "image/x-icon") < 0)
     return 0;
 
-  if (!html_upload(fd, "/other.html", "./test/other.html", "text/html"))
+  if (html_upload(fd, "/other.html", "./test/other.html", "text/html") < 0)
+    return 0;
+
+  if (html_upload(fd, "/other.js", "./test/other.js", "text/javascript") < 0)
     return 0;
 
   return 1;

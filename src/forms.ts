@@ -1,3 +1,25 @@
+import { EventEmitter, Handler, EventOf } from './events';
+
+type HtmlFormsEvents = {
+	message: [string];
+};
+
+const events = new EventEmitter<HtmlFormsEvents>();
+
+export function on<TEvent extends EventOf<HtmlFormsEvents> & string>(
+	event: TEvent,
+	handler: Handler<HtmlFormsEvents, TEvent>,
+): void {
+	events.on(event, handler);
+}
+
+export function off<TEvent extends EventOf<HtmlFormsEvents> & string>(
+	event: TEvent,
+	handler: Handler<HtmlFormsEvents, TEvent>,
+): void {
+	events.off(event, handler);
+}
+
 window.addEventListener('submit', (e) => {
 	const form = e.target as HTMLFormElement;
 	if (!form) return;
@@ -20,6 +42,19 @@ window.addEventListener('submit', (e) => {
 interface IShowAlertOpts {
 	title?: string;
 }
+
+interface NavigateMessage {
+	type: 'navigate';
+	href: string;
+}
+
+// :)
+interface MessageMessage {
+	type: 'message';
+	msg: string;
+}
+
+type OutputMessage = NavigateMessage | MessageMessage;
 
 class Connection {
 	ws: WebSocket;
@@ -96,20 +131,32 @@ class Connection {
 	}
 
 	onMessage(e: MessageEvent) {
-		let obj;
+		let obj: OutputMessage;
 		try {
 			obj = JSON.parse(e.data);
 		} catch (ex) {
 			alert('Error parsing JSON message from server. See console for details.');
 			console.error(ex);
+			return;
 		}
 
-		switch (obj.type) {
+		const type = obj.type;
+
+		switch (type) {
 			case 'navigate':
 				window.location.href = obj.href;
 				break;
+			case 'message':
+				const received = events.emit('message', obj.msg);
+				if (!received) {
+					this.showAlert(
+						'The application sent a message but had not yet listened to messages in the browser',
+						{ title: 'Warning' },
+					);
+				}
+				break;
 			default:
-				alert(`Unknown action type: ${obj.type}`);
+				this.showAlert(`Unknown action type: ${type}`);
 		}
 	}
 }

@@ -18,7 +18,11 @@
 extern "C" {
 #endif
 
-enum html_out_msg_type { HTML_BEGIN_UPLOAD = 0, HTML_NAVIGATE = 1 };
+enum html_out_msg_type {
+  HTML_BEGIN_UPLOAD = 0,
+  HTML_NAVIGATE = 1,
+  HTML_JS_MESSAGE = 2
+};
 
 typedef char html_mime_buf[HTML_MIME_SIZE];
 typedef char html_url_buf[HTML_URL_SIZE];
@@ -34,11 +38,16 @@ struct navigate {
   html_url_buf url;
 };
 
+struct js_message {
+  size_t content_length;
+};
+
 struct html_out_msg {
   enum html_out_msg_type type;
   union {
     struct begin_upload upload;
     struct navigate navigate;
+    struct js_message js_msg;
   } msg;
 };
 
@@ -70,6 +79,11 @@ msgstream_size HTML_API html_encode_navigate(void *data, size_t size,
                                              const char *url);
 
 int HTML_API html_navigate(msgstream_fd fd, const char *url);
+
+msgstream_size HTML_API html_encode_js_message(void *data, size_t size,
+                                               size_t content_length);
+
+int HTML_API html_send_js_message(msgstream_fd fd, const char *msg);
 
 int HTML_API html_decode_out_msg(const void *data, size_t size,
                                  struct html_out_msg *msg);

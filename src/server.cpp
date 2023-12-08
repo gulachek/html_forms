@@ -164,6 +164,9 @@ private:
     case HTML_NAVIGATE:
       do_navigate(msg.msg.navigate);
       break;
+    case HTML_JS_MESSAGE:
+      do_send_js_msg(msg.msg.js_msg);
+      break;
     default:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
@@ -391,6 +394,29 @@ private:
     }
 
     window_id_ = window_id;
+  }
+
+  void do_send_js_msg(const js_message &msg) {
+    ws_send_buf_.resize(msg.content_length);
+    my::async_readn(stream_, asio::buffer(ws_send_buf_), msg.content_length,
+                    bind(&self::on_recv_js_msg_content));
+  }
+
+  void on_recv_js_msg_content(std::error_code ec, std::size_t n) {
+    if (ec) {
+      return end_catui();
+    }
+
+    std::cerr << '[' << session_id_ << "] SEND: " << ws_send_buf_ << std::endl;
+
+    json::object msg;
+    msg["type"] = "message";
+    msg["msg"] = std::move(ws_send_buf_);
+    ws_send_buf_ = json::serialize(msg);
+    my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
+                       bind(&self::on_ws_write));
+
+    do_recv();
   }
 };
 

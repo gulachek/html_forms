@@ -110,6 +110,44 @@ int html_navigate(msgstream_fd fd, const char *url) {
   return msgstream_send(fd, buf, sizeof(buf), n, NULL);
 }
 
+msgstream_size html_encode_js_message(void *data, size_t size,
+                                      size_t content_length) {
+  // size: number
+
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_JS_MESSAGE))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "size", content_length))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return MSGSTREAM_ERR;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
+int html_send_js_message(msgstream_fd fd, const char *msg) {
+  char buf[HTML_MSG_SIZE];
+  size_t msg_size = strlen(msg);
+  msgstream_size n = html_encode_js_message(buf, sizeof(buf), msg_size);
+  if (n < 0)
+    return n;
+
+  n = msgstream_send(fd, buf, sizeof(buf), n, NULL);
+  if (n < 0)
+    return n;
+
+  if (write(fd, msg, msg_size) == -1)
+    return -1;
+
+  return msg_size;
+}
+
 static int copy_string(cJSON *obj, const char *prop, char *out,
                        size_t out_size) {
   cJSON *str = cJSON_GetObjectItem(obj, prop);
@@ -154,6 +192,20 @@ static int html_decode_navigate_msg(cJSON *obj, struct navigate *msg) {
   return 1;
 }
 
+static int html_decode_js_msg(cJSON *obj, struct js_message *msg) {
+  cJSON *size = cJSON_GetObjectItem(obj, "size");
+  if (!(size && cJSON_IsNumber(size)))
+    return 0;
+  double size_val = cJSON_GetNumberValue(size);
+  if (size_val < 0)
+    return 0;
+  msg->content_length = (size_t)size_val;
+  if (msg->content_length != size_val)
+    return 0;
+
+  return 1;
+}
+
 int html_decode_out_msg(const void *data, size_t size,
                         struct html_out_msg *msg) {
   // TODO error message for failure conditions
@@ -177,6 +229,9 @@ int html_decode_out_msg(const void *data, size_t size,
   } else if (type_val == HTML_NAVIGATE) {
     msg->type = HTML_NAVIGATE;
     ret = html_decode_navigate_msg(obj, &msg->msg.navigate);
+  } else if (type_val == HTML_JS_MESSAGE) {
+    msg->type = HTML_JS_MESSAGE;
+    ret = html_decode_js_msg(obj, &msg->msg.js_msg);
   } else {
     goto fail;
   }
