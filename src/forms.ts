@@ -49,20 +49,37 @@ interface NavigateMessage {
 }
 
 // :)
-interface MessageMessage {
-	type: 'message';
+interface SendJsMessage {
+	type: 'send';
 	msg: string;
 }
 
-type OutputMessage = NavigateMessage | MessageMessage;
+// application output to user
+type OutputMessage = NavigateMessage | SendJsMessage;
+
+interface RecvJsMessage {
+	type: 'recv';
+	msg: string;
+}
+
+// user input
+type InputMessage = RecvJsMessage;
 
 class Connection {
-	ws: WebSocket;
-	dialog: HTMLDialogElement;
+	private ws: WebSocket;
+	private dialog: HTMLDialogElement;
+	private isOpen: Promise<void>;
+	private resolveOpen?: () => void;
+	private rejectOpen?: () => void;
 
 	constructor() {}
 
 	start() {
+		this.isOpen = new Promise((res, rej) => {
+			this.resolveOpen = res;
+			this.rejectOpen = rej;
+		});
+
 		const url = new URL('~/ws', document.baseURI);
 		url.protocol = 'ws';
 		this.ws = new WebSocket(url);
@@ -111,11 +128,24 @@ class Connection {
 		this.dialog.showModal();
 	}
 
+	async send(msg: InputMessage): Promise<void> {
+		await this.isOpen;
+		this.ws.send(JSON.stringify(msg));
+	}
+
 	onOpen(_e: Event) {
-		//this.ws.send('Hello, Server!');
+		this.resolveOpen();
+		delete this.resolveOpen;
+		delete this.rejectOpen;
 	}
 
 	onError(e: Event) {
+		if (this.rejectOpen) {
+			this.rejectOpen();
+			delete this.resolveOpen;
+			delete this.rejectOpen;
+		}
+
 		console.error(e);
 		document.title = 'ERROR';
 		this.showAlert('Connection error. See console for more details.', {
@@ -146,7 +176,7 @@ class Connection {
 			case 'navigate':
 				window.location.href = obj.href;
 				break;
-			case 'message':
+			case 'send':
 				const received = events.emit('message', obj.msg);
 				if (!received) {
 					this.showAlert(
@@ -163,3 +193,7 @@ class Connection {
 
 const con = new Connection();
 con.start();
+
+export function sendMessage(msg: string): Promise<void> {
+	return con.send({ type: 'recv', msg });
+}

@@ -290,6 +290,44 @@ static int html_decode_submit_form_msg(cJSON *obj,
   return 1;
 }
 
+int HTML_API html_encode_recv_js_msg(void *data, size_t size,
+                                     size_t content_length) {
+  // size: number
+
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_RECV_JS_MSG))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_AddNumberToObject(obj, "size", content_length))
+    return MSGSTREAM_ERR;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return MSGSTREAM_ERR;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
+static int html_decode_recv_js_msg(cJSON *obj,
+                                   struct html_begin_recv_js_msg *msg) {
+  // size: number
+  // TODO - factor this size calc out
+  cJSON *size = cJSON_GetObjectItem(obj, "size");
+  if (!(size && cJSON_IsNumber(size)))
+    return 0;
+  double size_val = cJSON_GetNumberValue(size);
+  if (size_val < 0)
+    return 0;
+  msg->content_length = (size_t)size_val;
+  if (msg->content_length != size_val)
+    return 0;
+
+  return 1;
+}
+
 int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
   // TODO error message for failure conditions
 
@@ -309,6 +347,9 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
   if (type_val == HTML_SUBMIT_FORM) {
     msg->type = HTML_SUBMIT_FORM;
     ret = html_decode_submit_form_msg(obj, &msg->msg.form);
+  } else if (type_val == HTML_RECV_JS_MSG) {
+    msg->type = HTML_RECV_JS_MSG;
+    ret = html_decode_recv_js_msg(obj, &msg->msg.js_msg);
   } else {
     goto fail;
   }
@@ -478,6 +519,38 @@ static int html_read_form_data(msgstream_fd fd, void *data, size_t size) {
   int nread = 0;
   while (nread < form->content_length) {
     ssize_t ret = read(fd, data + nread, form->content_length - nread);
+    if (ret < 1)
+      return MSGSTREAM_ERR;
+
+    nread += ret;
+  }
+
+  ((char *)data)[nread] = '\0';
+  return nread;
+}
+
+int HTML_API html_recv_js_message(msgstream_fd fd, void *data, size_t size) {
+  uint8_t buf[HTML_MSG_SIZE];
+  msgstream_size n = msgstream_recv(fd, buf, sizeof(buf), NULL);
+  if (n < 0)
+    return n;
+
+  struct html_in_msg msg;
+  if (!html_decode_in_msg(buf, n, &msg))
+    return MSGSTREAM_ERR;
+
+  if (msg.type != HTML_RECV_JS_MSG)
+    return MSGSTREAM_ERR;
+
+  struct html_begin_recv_js_msg *js_msg = &msg.msg.js_msg;
+  if (js_msg->content_length + 1 > size) {
+    return MSGSTREAM_ERR;
+  }
+
+  // TODO - factor out readn
+  int nread = 0;
+  while (nread < js_msg->content_length) {
+    ssize_t ret = read(fd, data + nread, js_msg->content_length - nread);
     if (ret < 1)
       return MSGSTREAM_ERR;
 

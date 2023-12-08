@@ -51,17 +51,22 @@ struct html_out_msg {
   } msg;
 };
 
-enum html_in_msg_type { HTML_SUBMIT_FORM = 0 };
+enum html_in_msg_type { HTML_SUBMIT_FORM = 0, HTML_RECV_JS_MSG = 1 };
 
 struct html_begin_submit_form {
   size_t content_length;
   html_mime_buf mime_type;
 };
 
+struct html_begin_recv_js_msg {
+  size_t content_length;
+};
+
 struct html_in_msg {
   enum html_in_msg_type type;
   union {
     struct html_begin_submit_form form;
+    struct html_begin_recv_js_msg js_msg;
   } msg;
 };
 
@@ -95,6 +100,9 @@ int HTML_API html_encode_submit_form(void *data, size_t size,
                                      size_t content_length,
                                      const char *mime_type);
 
+int HTML_API html_encode_recv_js_msg(void *data, size_t size,
+                                     size_t content_length);
+
 struct html_form_;
 typedef struct html_form_ *html_form;
 
@@ -113,6 +121,8 @@ const char *HTML_API html_form_value_of(const html_form form,
 int HTML_API html_parse_target(const char *target, char *session_id,
                                size_t session_id_len, char *normalized_path,
                                size_t norm_path_len);
+
+int HTML_API html_recv_js_message(msgstream_fd fd, void *data, size_t size);
 
 #ifdef __cplusplus
 }

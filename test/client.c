@@ -39,7 +39,11 @@ int main() {
       return 1;
     }
 
-    sleep(1);
+    char sync_buf[16];
+    if (html_recv_js_message(fd, sync_buf, sizeof(sync_buf)) < 0) {
+      return 1;
+    }
+
     if (!html_send_js_message(fd, response))
       return 1;
 

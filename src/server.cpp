@@ -220,7 +220,65 @@ private:
     auto msg = beast::buffers_to_string(ws_buf_.data());
     ws_buf_.consume(size);
 
-    std::cerr << "Received message: " << msg << std::endl;
+    auto val = json::parse(msg);
+    if (!val.is_object()) {
+      std::cerr << "WS message is not a JSON object" << std::endl;
+      return end_ws();
+    }
+
+    // TODO validate this more
+    auto &obj = val.as_object();
+    auto &type = obj["type"].as_string();
+    if (type == "recv") {
+      auto &js_msg = obj["msg"].as_string();
+      do_send_recv_msg(js_msg);
+    } else {
+      std::cerr << "Invalid WS message type: " << type << std::endl;
+      return end_ws();
+    }
+  }
+
+  void do_send_recv_msg(json::string &msg) {
+    std::cerr << '[' << session_id_ << "] RECV: " << msg << std::endl;
+
+    // TODO - need to sync w/ POST
+    submit_buf_.resize(HTML_MSG_SIZE);
+    if (html_encode_recv_js_msg(submit_buf_.data(), submit_buf_.size(),
+                                msg.size()) < 0) {
+      std::cerr << "Failed to encode recv msg" << std::endl;
+      return end_ws();
+    }
+
+    asio::dispatch(stream_.get_executor(),
+                   bind(&self::submit_recv_js_msg,
+                        std::make_shared<std::string>(std::move(msg))));
+  }
+
+  void submit_recv_js_msg(std::shared_ptr<std::string> msg) {
+    auto buf = asio::buffer(submit_buf_.data(), HTML_MSG_SIZE);
+    my::async_msgstream_send(stream_, buf, submit_buf_.size(),
+                             bind(&self::on_submit_recv_js_msg, msg));
+  }
+
+  void on_submit_recv_js_msg(std::shared_ptr<std::string> msg,
+                             std::error_condition ec, msgstream_size n) {
+    if (ec) {
+      std::cerr << "Failed to send RECV msg" << std::endl;
+      return end_catui();
+    }
+
+    asio::async_write(stream_, asio::buffer(*msg),
+                      asio::transfer_exactly(msg->size()),
+                      bind(&self::on_send_recv_js_msg_content, msg));
+  }
+
+  void on_send_recv_js_msg_content(std::shared_ptr<std::string> msg,
+                                   std::error_code ec, std::size_t n) {
+    if (ec) {
+      std::cerr << "Failed to send RECV msg content" << std::endl;
+      return end_catui();
+    }
+
     do_ws_read();
   }
 
@@ -410,7 +468,7 @@ private:
     std::cerr << '[' << session_id_ << "] SEND: " << ws_send_buf_ << std::endl;
 
     json::object msg;
-    msg["type"] = "message";
+    msg["type"] = "send";
     msg["msg"] = std::move(ws_send_buf_);
     ws_send_buf_ = json::serialize(msg);
     my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
