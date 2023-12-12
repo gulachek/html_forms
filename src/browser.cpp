@@ -1,6 +1,7 @@
 #include "browser.hpp"
 #include "async_msgstream.hpp"
 #include "boost/asio/any_io_executor.hpp"
+#include <iterator>
 
 namespace bp = boost::process;
 namespace asio = boost::asio;
@@ -9,6 +10,7 @@ namespace json = boost::json;
 using load_url_handler = browser::load_url_handler;
 using close_window_handler = browser::close_window_handler;
 using lock_ptr = async_mutex<asio::any_io_executor>::lock_ptr;
+using window_id = browser::window_id;
 
 #define BUF_SIZE 2048
 
@@ -32,21 +34,30 @@ void browser::send_msg(
                        out_buf_.size(), cb);
 }
 
-void browser::async_load_url(const std::string_view &url,
-                             const std::function<load_url_handler> &cb) {
+window_id browser::async_load_url(const std::string_view &url,
+                                  const std::optional<window_id> &window,
+                                  const std::function<load_url_handler> &cb) {
   proc();
 
-  mtx_.async_lock([this, cb, url = std::string{url}](lock_ptr lock) {
-    auto window = next_window_id_++;
-    load_url_handlers_[window] = cb;
+  window_id win;
+  if (window) {
+    win = *window;
+  } else {
+    win = next_window_id_++;
+  }
+
+  mtx_.async_lock([this, cb, win, url = std::string{url}](lock_ptr lock) {
+    load_url_handlers_[win] = cb;
 
     json::object obj;
     obj["type"] = "open";
     obj["url"] = url;
-    obj["windowId"] = window;
+    obj["windowId"] = win;
 
-    send_msg(obj, bind(&browser::on_write_url, window, lock));
+    send_msg(obj, bind(&browser::on_write_url, win, lock));
   });
+
+  return win;
 }
 
 void browser::on_write_url(window_id window, lock_ptr lock,
@@ -56,7 +67,7 @@ void browser::on_write_url(window_id window, lock_ptr lock,
     return;
 
   auto &cb = node.mapped();
-  cb(ec, window);
+  cb(ec);
 }
 
 void browser::async_close_window(

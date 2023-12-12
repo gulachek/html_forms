@@ -32,8 +32,13 @@ app.whenReady().then(async () => {
 
 		if (jobj.type === 'open') {
 			const { windowId, url } = jobj;
-			const win = new BrowserWindow();
-			windows.set(windowId, win);
+			let win = windows.get(windowId);
+
+			if (!win) {
+				win = new BrowserWindow();
+				windows.set(windowId, win);
+			}
+
 			win.loadURL(url);
 		} else if (jobj.type === 'close') {
 			const { windowId } = jobj;

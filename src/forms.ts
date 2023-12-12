@@ -43,11 +43,6 @@ interface IShowAlertOpts {
 	title?: string;
 }
 
-interface NavigateMessage {
-	type: 'navigate';
-	href: string;
-}
-
 // :)
 interface SendJsMessage {
 	type: 'send';
@@ -55,7 +50,7 @@ interface SendJsMessage {
 }
 
 // application output to user
-type OutputMessage = NavigateMessage | SendJsMessage;
+type OutputMessage = SendJsMessage;
 
 interface RecvJsMessage {
 	type: 'recv';
@@ -173,9 +168,6 @@ class Connection {
 		const type = obj.type;
 
 		switch (type) {
-			case 'navigate':
-				window.location.href = obj.href;
-				break;
 			case 'send':
 				const received = events.emit('message', obj.msg);
 				if (!received) {

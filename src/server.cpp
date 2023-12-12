@@ -292,6 +292,8 @@ private:
                 << std::endl;
       return end_ws();
     }
+
+    do_recv();
   }
 
   my::string_response respond_post(const std::string_view &target,
@@ -433,29 +435,17 @@ private:
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     std::cerr << "Opening " << os.str() << std::endl;
 
-    if (window_id_) {
-      // TODO - needs to account for reconnect across
-      // navigation / missing ws
-      json::object navigate;
-      navigate["type"] = "navigate";
-      navigate["href"] = os.str();
-      ws_send_buf_ = json::serialize(navigate);
-      my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
-                         bind(&self::on_ws_write));
-    } else {
-      browser_.async_load_url(os.str(), bind(&self::on_load_url));
-    }
-
-    do_recv();
+    window_id_ =
+        browser_.async_load_url(os.str(), window_id_, bind(&self::on_load_url));
   }
 
-  void on_load_url(std::error_condition ec, browser::window_id window_id) {
+  void on_load_url(std::error_condition ec) {
     if (ec) {
       std::cerr << "Error opening window: " << ec.message() << std::endl;
       return;
     }
 
-    window_id_ = window_id;
+    do_recv();
   }
 
   void do_send_js_msg(const js_message &msg) {
@@ -477,8 +467,6 @@ private:
     ws_send_buf_ = json::serialize(msg);
     my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
                        bind(&self::on_ws_write));
-
-    do_recv();
   }
 };
 

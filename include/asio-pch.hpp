@@ -2,6 +2,7 @@
 #define ASIO_PCH
 
 #include <algorithm>
+#include <atomic>
 #include <boost/asio/compose.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
@@ -19,6 +20,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>

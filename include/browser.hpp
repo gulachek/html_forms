@@ -9,16 +9,17 @@
 class browser {
 public:
   using window_id = int;
-  using load_url_handler = void(std::error_condition, window_id);
+  using load_url_handler = void(std::error_condition);
   using close_window_handler = void(std::error_condition);
   using lock_ptr = async_mutex<boost::asio::any_io_executor>::lock_ptr;
 
   browser(boost::asio::io_context &ioc);
 
-  void async_load_url(const std::string_view &url,
-                      const std::function<load_url_handler> &cb);
+  window_id async_load_url(const std::string_view &url,
+                           const std::optional<window_id> &window,
+                           const std::function<load_url_handler> &cb);
 
-  void async_close_window(window_id id,
+  void async_close_window(window_id window,
                           const std::function<close_window_handler> &cb);
 
 private:
@@ -48,7 +49,7 @@ private:
   std::string out_buf_;
   std::vector<char> in_buf_;
 
-  window_id next_window_id_;
+  std::atomic<window_id> next_window_id_;
   std::map<window_id, std::function<load_url_handler>> load_url_handlers_;
 };
 
