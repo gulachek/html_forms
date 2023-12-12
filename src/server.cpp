@@ -141,7 +141,11 @@ private:
   }
 
   void do_recv() {
-    my::async_msgstream_recv(stream_, asio::buffer(buf_), bind(&self::on_recv));
+    asio::dispatch([this] {
+      stream_.get_executor(),
+          my::async_msgstream_recv(stream_, asio::buffer(buf_),
+                                   bind(&self::on_recv));
+    });
   }
 
   void on_recv(std::error_condition ec, msgstream_size n) {
@@ -418,7 +422,7 @@ private:
   void on_read_upload(std::error_code ec, std::size_t n) {
     if (ec) {
       std::cerr << "Error reading upload: " << ec.message() << std::endl;
-      return;
+      return end_catui();
     }
 
     do_recv();
