@@ -10,7 +10,6 @@
 #define HTML_API
 #endif
 
-#include <msgstream.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -72,23 +71,20 @@ struct html_in_msg {
 
 int HTML_API html_connect(FILE *err);
 
-msgstream_size HTML_API html_encode_upload(void *data, size_t size,
-                                           const char *url,
-                                           size_t content_length,
-                                           const char *mime_type);
+int HTML_API html_encode_upload(void *data, size_t size, const char *url,
+                                size_t content_length, const char *mime_type);
 
-int HTML_API html_upload(msgstream_fd fd, const char *url,
-                         const char *file_path, const char *mime_type);
+int HTML_API html_upload(int fd, const char *url, const char *file_path,
+                         const char *mime_type);
 
-msgstream_size HTML_API html_encode_navigate(void *data, size_t size,
-                                             const char *url);
+int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 
-int HTML_API html_navigate(msgstream_fd fd, const char *url);
+int HTML_API html_navigate(int fd, const char *url);
 
-msgstream_size HTML_API html_encode_js_message(void *data, size_t size,
-                                               size_t content_length);
+int HTML_API html_encode_js_message(void *data, size_t size,
+                                    size_t content_length);
 
-int HTML_API html_send_js_message(msgstream_fd fd, const char *msg);
+int HTML_API html_send_js_message(int fd, const char *msg);
 
 int HTML_API html_decode_out_msg(const void *data, size_t size,
                                  struct html_out_msg *msg);
@@ -109,7 +105,7 @@ typedef struct html_form_ *html_form;
 /**
  * Read a application/x-www-form-urlencoded form
  */
-int HTML_API html_read_form(msgstream_fd fd, html_form *form_ptr);
+int HTML_API html_read_form(int fd, html_form *form_ptr);
 void HTML_API html_form_release(html_form *form_ptr);
 
 size_t HTML_API html_form_size(const html_form form);
@@ -122,7 +118,7 @@ int HTML_API html_parse_target(const char *target, char *session_id,
                                size_t session_id_len, char *normalized_path,
                                size_t norm_path_len);
 
-int HTML_API html_recv_js_message(msgstream_fd fd, void *data, size_t size);
+int HTML_API html_recv_js_message(int fd, void *data, size_t size);
 
 #ifdef __cplusplus
 }

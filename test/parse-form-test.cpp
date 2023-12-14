@@ -2,6 +2,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "html-forms.h"
+#include <msgstream.h>
 
 struct f {
   int pipe_[2];
@@ -26,7 +27,7 @@ struct f {
 
     BOOST_REQUIRE(n > 0);
 
-    if (msgstream_send(pipe_[1], buf, sizeof(buf), n, stderr) < 0)
+    if (msgstream_fd_send(pipe_[1], buf, sizeof(buf), n))
       BOOST_FAIL("Failed to send form header");
 
     if (write(pipe_[1], sv.data(), sv.size()) != sv.size())

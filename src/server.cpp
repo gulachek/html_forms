@@ -14,7 +14,6 @@
 //------------------------------------------------------------------------------
 #include "asio-pch.hpp"
 #include "browser.hpp"
-#include "catui.h"
 #include "html-forms.h"
 #include "http_listener.hpp"
 #include "my-asio.hpp"
@@ -22,7 +21,7 @@
 #include "open-url.hpp"
 
 extern "C" {
-#include <catui_server.h>
+#include <catui.h>
 }
 
 namespace asio = boost::asio;
@@ -130,7 +129,7 @@ private:
                              bind(&self::on_ack));
   }
 
-  void on_ack(std::error_condition ec, msgstream_size n) {
+  void on_ack(std::error_condition ec, std::size_t n) {
     if (ec) {
       std::cerr << "Error sending ack: " << ec.message() << std::endl;
       return end_catui();
@@ -148,7 +147,7 @@ private:
     });
   }
 
-  void on_recv(std::error_condition ec, msgstream_size n) {
+  void on_recv(std::error_condition ec, std::size_t n) {
     if (ec) {
       std::cerr << "Error receiving html message: " << ec.message()
                 << std::endl;
@@ -265,7 +264,7 @@ private:
   }
 
   void on_submit_recv_js_msg(std::shared_ptr<std::string> msg,
-                             std::error_condition ec, msgstream_size n) {
+                             std::error_condition ec, std::size_t n) {
     if (ec) {
       std::cerr << "Failed to send RECV msg" << std::endl;
       return end_catui();
@@ -340,7 +339,7 @@ private:
   }
 
   void on_submit_post(std::shared_ptr<std::string> body,
-                      std::error_condition ec, msgstream_size n) {
+                      std::error_condition ec, std::size_t n) {
     if (ec) {
       std::cerr << "Error sending form to app: " << ec.message() << std::endl;
       return end_catui();

@@ -31,11 +31,11 @@ private:
   std::shared_ptr<boost::process::child> proc();
 
   void on_write_url(window_id window, lock_ptr lock, std::error_condition ec,
-                    msgstream_size n);
+                    std::size_t n);
 
   void
   send_msg(const boost::json::object &obj,
-           const std::function<void(std::error_condition, msgstream_size)> &cb);
+           const std::function<void(std::error_condition, std::size_t)> &cb);
 
   async_mutex<boost::asio::any_io_executor> mtx_;
 

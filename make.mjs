@@ -84,7 +84,7 @@ cli((book, opts) => {
 			'src/browser.cpp',
 			formsJsCpp,
 		],
-		link: ['catui-server', htmlLib, 'boost-json', 'boost-filesystem'],
+		link: ['catui', htmlLib, 'boost-json', 'boost-filesystem'],
 	});
 
 	const urlTest = c.addExecutable({

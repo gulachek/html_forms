@@ -1,5 +1,5 @@
 #include "html-forms.h"
-#include "msgstream.h"
+#include <msgstream.h>
 
 #include <catui.h>
 #include <cjson/cJSON.h>
@@ -13,37 +13,36 @@ int html_connect(FILE *err) {
   return catui_connect("com.gulachek.html-forms", "0.1.0", err);
 }
 
-msgstream_size html_encode_upload(void *data, size_t size, const char *url,
-                                  size_t content_length,
-                                  const char *mime_type) {
+int html_encode_upload(void *data, size_t size, const char *url,
+                       size_t content_length, const char *mime_type) {
   // url: string
   // mime: string
   // size: number
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "type", HTML_BEGIN_UPLOAD))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddStringToObject(obj, "mime", mime_type))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddStringToObject(obj, "url", url))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_PrintPreallocated(obj, data, size, 0))
-    return MSGSTREAM_ERR;
+    return -1;
 
   cJSON_Delete(obj);
   return strlen(data);
 }
 
-int html_upload(msgstream_fd fd, const char *url, const char *file_path,
+int html_upload(int fd, const char *url, const char *file_path,
                 const char *mime_type) {
   struct stat stats;
   if (stat(file_path, &stats) == -1) {
@@ -51,12 +50,11 @@ int html_upload(msgstream_fd fd, const char *url, const char *file_path,
   }
 
   char buf[HTML_MSG_SIZE];
-  msgstream_size n =
-      html_encode_upload(buf, sizeof(buf), url, stats.st_size, mime_type);
+  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, mime_type);
   if (n < 0)
     return n;
 
-  if (msgstream_send(fd, buf, sizeof(buf), n, NULL) < 0)
+  if (msgstream_fd_send(fd, buf, sizeof(buf), n))
     return -1;
 
   FILE *f = fopen(file_path, "r");
@@ -81,66 +79,67 @@ int html_upload(msgstream_fd fd, const char *url, const char *file_path,
   return stats.st_size;
 }
 
-msgstream_size html_encode_navigate(void *data, size_t size, const char *url) {
+int html_encode_navigate(void *data, size_t size, const char *url) {
   // url: string
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "type", HTML_NAVIGATE))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddStringToObject(obj, "url", url))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_PrintPreallocated(obj, data, size, 0))
-    return MSGSTREAM_ERR;
+    return -1;
 
   cJSON_Delete(obj);
   return strlen(data);
 }
 
-int html_navigate(msgstream_fd fd, const char *url) {
+int html_navigate(int fd, const char *url) {
   char buf[HTML_MSG_SIZE];
-  msgstream_size n = html_encode_navigate(buf, sizeof(buf), url);
+  int n = html_encode_navigate(buf, sizeof(buf), url);
   if (n < 0)
     return n;
 
-  return msgstream_send(fd, buf, sizeof(buf), n, NULL);
+  if (msgstream_fd_send(fd, buf, sizeof(buf), n))
+    return -1;
+
+  return n;
 }
 
-msgstream_size html_encode_js_message(void *data, size_t size,
-                                      size_t content_length) {
+int html_encode_js_message(void *data, size_t size, size_t content_length) {
   // size: number
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "type", HTML_JS_MESSAGE))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_PrintPreallocated(obj, data, size, 0))
-    return MSGSTREAM_ERR;
+    return -1;
 
   cJSON_Delete(obj);
   return strlen(data);
 }
 
-int html_send_js_message(msgstream_fd fd, const char *msg) {
+int html_send_js_message(int fd, const char *msg) {
   char buf[HTML_MSG_SIZE];
   size_t msg_size = strlen(msg);
-  msgstream_size n = html_encode_js_message(buf, sizeof(buf), msg_size);
+  int n = html_encode_js_message(buf, sizeof(buf), msg_size);
   if (n < 0)
     return n;
 
-  n = msgstream_send(fd, buf, sizeof(buf), n, NULL);
-  if (n < 0)
-    return n;
+  if (msgstream_fd_send(fd, buf, sizeof(buf), n))
+    return -1;
 
   if (write(fd, msg, msg_size) == -1)
     return -1;
@@ -252,19 +251,19 @@ int HTML_API html_encode_submit_form(void *data, size_t size,
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "type", HTML_SUBMIT_FORM))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddStringToObject(obj, "mime", mime_type))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_PrintPreallocated(obj, data, size, 0))
-    return MSGSTREAM_ERR;
+    return -1;
 
   cJSON_Delete(obj);
   return strlen(data);
@@ -296,16 +295,16 @@ int HTML_API html_encode_recv_js_msg(void *data, size_t size,
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "type", HTML_RECV_JS_MSG))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (!cJSON_PrintPreallocated(obj, data, size, 0))
-    return MSGSTREAM_ERR;
+    return -1;
 
   cJSON_Delete(obj);
   return strlen(data);
@@ -495,32 +494,32 @@ int html_parse_target(const char *target, char *session_id,
   return 1;
 }
 
-static int html_read_form_data(msgstream_fd fd, void *data, size_t size) {
+static int html_read_form_data(int fd, void *data, size_t size) {
   uint8_t buf[HTML_MSG_SIZE];
-  msgstream_size n = msgstream_recv(fd, buf, sizeof(buf), NULL);
-  if (n < 0)
-    return n;
+  size_t n;
+  if (msgstream_fd_recv(fd, buf, sizeof(buf), &n))
+    return -1;
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (msg.type != HTML_SUBMIT_FORM)
-    return MSGSTREAM_ERR;
+    return -1;
 
   struct html_begin_submit_form *form = &msg.msg.form;
   if (strcmp(form->mime_type, "application/x-www-form-urlencoded") != 0) {
-    return MSGSTREAM_ERR;
+    return -1;
   }
 
   if (form->content_length + 1 > size)
-    return MSGSTREAM_ERR;
+    return -1;
 
   int nread = 0;
   while (nread < form->content_length) {
     ssize_t ret = read(fd, data + nread, form->content_length - nread);
     if (ret < 1)
-      return MSGSTREAM_ERR;
+      return -1;
 
     nread += ret;
   }
@@ -529,22 +528,23 @@ static int html_read_form_data(msgstream_fd fd, void *data, size_t size) {
   return nread;
 }
 
-int HTML_API html_recv_js_message(msgstream_fd fd, void *data, size_t size) {
+int HTML_API html_recv_js_message(int fd, void *data, size_t size) {
   uint8_t buf[HTML_MSG_SIZE];
-  msgstream_size n = msgstream_recv(fd, buf, sizeof(buf), NULL);
-  if (n < 0)
-    return n;
+  size_t n;
+
+  if (msgstream_fd_recv(fd, buf, sizeof(buf), &n))
+    return -1;
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg))
-    return MSGSTREAM_ERR;
+    return -1;
 
   if (msg.type != HTML_RECV_JS_MSG)
-    return MSGSTREAM_ERR;
+    return -1;
 
   struct html_begin_recv_js_msg *js_msg = &msg.msg.js_msg;
   if (js_msg->content_length + 1 > size) {
-    return MSGSTREAM_ERR;
+    return -1;
   }
 
   // TODO - factor out readn
@@ -552,7 +552,7 @@ int HTML_API html_recv_js_message(msgstream_fd fd, void *data, size_t size) {
   while (nread < js_msg->content_length) {
     ssize_t ret = read(fd, data + nread, js_msg->content_length - nread);
     if (ret < 1)
-      return MSGSTREAM_ERR;
+      return -1;
 
     nread += ret;
   }
@@ -669,7 +669,7 @@ static int parse_field(char *buf, size_t size, int offset,
   return field_size;
 }
 
-int html_read_form(msgstream_fd fd, html_form *pform) {
+int html_read_form(int fd, html_form *pform) {
   if (!pform)
     return -1;
 
@@ -677,7 +677,7 @@ int html_read_form(msgstream_fd fd, html_form *pform) {
     html_form_release(pform);
 
   char buf[HTML_FORM_SIZE];
-  msgstream_size n = html_read_form_data(fd, buf, sizeof(buf));
+  int n = html_read_form_data(fd, buf, sizeof(buf));
   if (n < 1)
     return n;
 
@@ -689,17 +689,17 @@ int html_read_form(msgstream_fd fd, html_form *pform) {
 
   html_form form;
   if ((form = malloc(sizeof(struct html_form_))) == NULL)
-    return MSGSTREAM_ERR;
+    return -1;
 
   form->size = nfields;
   if ((form->fields = calloc(nfields, sizeof(struct html_form_field))) == NULL)
-    return MSGSTREAM_ERR;
+    return -1;
 
   int i = 0;
   for (int field_i = 0; field_i < nfields; ++field_i) {
     int field_size = parse_field(buf, n, i, &form->fields[field_i]);
     if (field_size < 0)
-      return MSGSTREAM_ERR;
+      return -1;
 
     i += field_size + 1; // magic 1 for '&'
   }

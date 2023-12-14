@@ -5,7 +5,7 @@
 #include <msgstream.h>
 #include <system_error>
 
-typedef void msgstream_handler(std::error_condition, msgstream_size);
+typedef void msgstream_handler(std::error_condition, size_t);
 
 template <typename AsyncWriteStream> struct async_msgstream_send_impl {
   enum state { header, body, complete };
@@ -21,17 +21,21 @@ public:
   template <typename Self>
   void operator()(Self &self, std::error_code error = {}, std::size_t n = 0) {
     if (state_ == header) {
-      auto n = msgstream_encode_header(
-          header_buf_->data(), header_buf_->size(), buf_.size(),
-          static_cast<msgstream_size>(msg_size_), nullptr);
+      std::size_t hdr_size;
+      int ec = msgstream_header_size(buf_.size(), &hdr_size);
+      if (ec) {
+        // TODO error
+      }
 
-      if (n < 0) {
-        // error code
+      ec = msgstream_encode_header(msg_size_, hdr_size, header_buf_->data());
+
+      if (ec) {
+        // TODO error code
       }
 
       state_ = body;
       boost::asio::async_write(stream_, boost::asio::buffer(*header_buf_),
-                               boost::asio::transfer_exactly(n),
+                               boost::asio::transfer_exactly(hdr_size),
                                std::move(self));
     } else if (state_ == body) {
       if (error) {
@@ -84,14 +88,15 @@ public:
   template <typename Self>
   void operator()(Self &self, std::error_code error = {}, std::size_t n = 0) {
     if (state_ == header) {
-      auto header_size = msgstream_header_size(buf_.size(), stderr);
-      if (header_size < 0) {
-        // error code
+      std::size_t hdr_size;
+      int ec = msgstream_header_size(buf_.size(), &hdr_size);
+      if (ec) {
+        // TODO error code
       }
 
       state_ = body;
       boost::asio::async_read(stream_, boost::asio::buffer(*header_buf_),
-                              boost::asio::transfer_exactly(header_size),
+                              boost::asio::transfer_exactly(hdr_size),
                               std::move(self));
     } else if (state_ == body) {
       if (error) {
@@ -99,9 +104,10 @@ public:
         return;
       }
 
-      auto msg_size = msgstream_decode_header(header_buf_->data(), n, stderr);
-      if (msg_size < 0) {
-        // error code
+      std::size_t msg_size;
+      int ec = msgstream_decode_header(header_buf_->data(), n, &msg_size);
+      if (ec) {
+        // TODO error code
       }
 
       state_ = complete;

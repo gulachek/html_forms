@@ -23,7 +23,7 @@ browser::browser(asio::io_context &ioc)
 
 void browser::send_msg(
     const json::object &obj,
-    const std::function<void(std::error_condition, msgstream_size)> &cb) {
+    const std::function<void(std::error_condition, std::size_t)> &cb) {
   out_buf_ = json::serialize(obj);
   if (out_buf_.size() > BUF_SIZE) {
     cb(std::make_error_condition(std::errc::no_buffer_space), -1);
@@ -61,7 +61,7 @@ window_id browser::async_load_url(const std::string_view &url,
 }
 
 void browser::on_write_url(window_id window, lock_ptr lock,
-                           std::error_condition ec, msgstream_size n) {
+                           std::error_condition ec, std::size_t n) {
   auto node = load_url_handlers_.extract(window);
   if (node.empty())
     return;
@@ -80,7 +80,7 @@ void browser::async_close_window(
     obj["type"] = "close";
     obj["windowId"] = window;
 
-    send_msg(obj, [cb](std::error_condition ec, msgstream_size n) { cb(ec); });
+    send_msg(obj, [cb](std::error_condition ec, std::size_t n) { cb(ec); });
   });
 }
 
