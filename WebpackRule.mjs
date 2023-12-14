@@ -1,14 +1,51 @@
 import { Path } from 'esmakefile';
 import webpack from 'webpack';
 import { dirname, basename } from 'node:path';
+import { Worker, isMainThread, parentPort } from 'node:worker_threads';
+
+if (!isMainThread) {
+	let wp;
+	parentPort.on('message', (msg) => {
+		if (msg.type !== 'start')
+			throw new Error(`unknown webpack worker message type "${msg.type}`);
+
+		if (!wp) {
+			wp = webpack(msg.config);
+		}
+
+		wp.run((err, stats) => {
+			const statsJson = stats.toJson();
+			const statsColors = stats.toString({ colors: true });
+
+			wp.close((closeErr) => {
+				parentPort.postMessage({
+					type: 'complete',
+					err,
+					statsJson,
+					statsColors,
+					statsHasErrors: stats.hasErrors(),
+				});
+
+				closeErr && console.error('Error closing webpack', closeErr);
+			});
+		});
+	});
+}
 
 class WebpackRule {
+	worker;
 	wp;
 	config;
 	srcPath;
 	outPath;
+	workResolve;
+	workReject;
 
 	constructor(opts, srcPath, outPath, config) {
+		this.worker = new Worker(new URL(import.meta.url));
+		this.worker.on('message', (msg) => this.onWorkerMessage(msg));
+		this.worker.unref();
+
 		if (opts.isDevelopment) {
 			config.mode = 'development';
 			config.devtool = 'inline-source-map';
@@ -27,10 +64,10 @@ class WebpackRule {
 		return [this.outPath];
 	}
 
-	recipe(args) {
+	async recipe(args) {
 		const [src, out] = args.absAll(this.srcPath, this.outPath);
 
-		if (!this.wp) {
+		if (!this.config.entry) {
 			const config = this.config;
 			config.entry = src;
 			config.output = config.output || {};
@@ -49,27 +86,53 @@ class WebpackRule {
 			config.resolve = {
 				extensions: ['.ts', '.js'],
 			};
-			this.wp = webpack(this.config);
 		}
 
-		return new Promise((res) => {
-			this.wp.run((err, stats) => {
-				const statsJson = stats.toJson();
-				statsJson.modules.forEach((mod) => {
-					if (mod.nameForCondition) {
-						args.addPostreq(mod.nameForCondition);
-					}
-				});
+		const { err, statsJson, statsColors, statsHasErrors } =
+			await this.runWorker();
 
-				err && args.logStream.write(err);
-				args.logStream.write(stats.toString({ colors: true }));
-				res(!(err || stats.hasErrors()));
+		statsJson.modules.forEach((mod) => {
+			if (mod.nameForCondition) {
+				args.addPostreq(mod.nameForCondition);
+			}
+		});
 
-				this.wp.close((closeErr) => {
-					closeErr && console.error('Error closing webpack', closeErr);
-				});
+		err && args.logStream.write(err);
+		args.logStream.write(statsColors);
+		return !(err || statsHasErrors);
+	}
+
+	clearWorker() {
+		delete this.workResolve;
+		delete this.workReject;
+	}
+
+	runWorker() {
+		if (this.workResolve) throw new Error('worker already in progress');
+
+		return new Promise((res, rej) => {
+			this.workResolve = res;
+			this.workReject = rej;
+
+			this.worker.postMessage({
+				type: 'start',
+				config: this.config,
 			});
 		});
+	}
+
+	onWorkerMessage(msg) {
+		if (!this.workResolve)
+			throw new Error(
+				`Wasn't listenening for webpack worker message but received one`,
+			);
+
+		if (msg.type !== 'complete') {
+			throw new Error(`Unexpected webpack worker message type "${type}"`);
+		}
+
+		this.workResolve(msg);
+		this.clearWorker();
 	}
 }
 
