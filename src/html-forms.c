@@ -716,20 +716,15 @@ static int parse_field(char *buf, size_t size, int offset,
   return field_size;
 }
 
-int html_read_form(html_connection con, html_form *pform) {
-  if (!con)
-    return -1;
-
-  if (!pform)
-    return -1;
-
-  if (*pform)
-    html_form_release(pform);
+enum html_error_code html_read_form(html_connection con, html_form *pform) {
+  if (!(con && pform))
+    return HTML_ERROR;
 
   char buf[HTML_FORM_SIZE];
   int n = html_read_form_data(con->fd, buf, sizeof(buf));
-  if (n < 1)
-    return n;
+  if (n < 1) {
+    return n == 0 ? HTML_OK : HTML_ERROR;
+  }
 
   int nfields = 1;
   for (int i = 0; i < n; ++i) {
@@ -739,11 +734,11 @@ int html_read_form(html_connection con, html_form *pform) {
 
   html_form form;
   if ((form = malloc(sizeof(struct html_form_))) == NULL)
-    return -1;
+    return HTML_ERROR;
 
   form->size = nfields;
   if ((form->fields = calloc(nfields, sizeof(struct html_form_field))) == NULL)
-    return -1;
+    return HTML_ERROR;
 
   int i = 0;
   for (int field_i = 0; field_i < nfields; ++field_i) {
@@ -755,7 +750,7 @@ int html_read_form(html_connection con, html_form *pform) {
   }
 
   *pform = form;
-  return nfields;
+  return HTML_OK;
 }
 
 void html_form_release(html_form *pform) {

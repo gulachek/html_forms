@@ -6,6 +6,15 @@
 #define HTML_MIME_SIZE 128
 #define HTML_FORM_SIZE 4096
 
+enum html_error_code {
+  /* no error */
+  HTML_OK = 0,
+  /* error */
+  HTML_ERROR = 1,
+  /* user or program requested close while operation in progress */
+  HTML_CLOSE_REQ = 2,
+};
+
 #ifndef HTML_API
 #define HTML_API
 #endif
@@ -111,7 +120,9 @@ typedef struct html_form_ *html_form;
 /**
  * Read a application/x-www-form-urlencoded form
  */
-int HTML_API html_read_form(html_connection con, html_form *form_ptr);
+enum html_error_code HTML_API html_read_form(html_connection con,
+                                             html_form *form_ptr);
+
 void HTML_API html_form_release(html_form *form_ptr);
 
 size_t HTML_API html_form_size(const html_form form);

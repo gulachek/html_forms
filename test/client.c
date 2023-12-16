@@ -31,7 +31,7 @@ int main() {
     if (!html_navigate(con, "/index.html"))
       return 1;
 
-    if (html_read_form(con, &form) < 0) {
+    if (html_read_form(con, &form)) {
       return 1;
     }
 
@@ -53,7 +53,7 @@ int main() {
     if (!html_send_js_message(con, response))
       return 1;
 
-    if (html_read_form(con, &form) < 0) {
+    if (html_read_form(con, &form)) {
       return 1;
     }
 
