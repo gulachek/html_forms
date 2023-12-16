@@ -2,22 +2,28 @@
 #include <boost/test/unit_test.hpp>
 
 #include "html-forms.h"
+#include "html_connection.h"
 #include <msgstream.h>
 
 struct f {
   int pipe_[2];
   html_form form_ = nullptr;
+  html_connection con_ = nullptr;
 
   f() {
     if (::pipe(pipe_) == -1) {
       BOOST_FAIL("Failed to create pipes");
     }
+
+    con_ = html_connection_alloc();
+    con_->fd = pipe_[0]; // for reading forms
   }
 
   ~f() {
     ::close(pipe_[0]);
     ::close(pipe_[1]);
     html_form_release(&form_);
+    html_connection_free(&con_);
   }
 
   void send(const std::string_view &sv) {
@@ -36,7 +42,7 @@ struct f {
 
   int recv(const std::string_view &sv) {
     send(sv);
-    int ret = html_read_form(pipe_[0], &form_);
+    int ret = html_read_form(con_, &form_);
     if (ret < 0)
       BOOST_FAIL("Failed to read form");
 
@@ -55,7 +61,7 @@ struct f {
 
   void fail(const std::string_view &sv) {
     send(sv);
-    int ret = html_read_form(pipe_[0], &form_);
+    int ret = html_read_form(con_, &form_);
     BOOST_TEST(ret < 0);
   }
 

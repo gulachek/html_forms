@@ -21,6 +21,7 @@ cli((book, opts) => {
 		privateDefinitions: {
 			HTML_API: 'EXPORT',
 		},
+		privateIncludes: ['private'],
 		src: ['src/html-forms.c'],
 		link: ['msgstream', 'cjson', 'catui'],
 	});
@@ -96,6 +97,7 @@ cli((book, opts) => {
 	const parseFormTest = c.addExecutable({
 		name: 'parse-form-test',
 		src: ['test/parse-form-test.cpp'],
+		privateIncludes: ['private'],
 		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
 	});
 

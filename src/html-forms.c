@@ -1,4 +1,5 @@
 #include "html-forms.h"
+#include "html_connection.h"
 #include <msgstream.h>
 
 #include <catui.h>
@@ -9,8 +10,34 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-int html_connect(FILE *err) {
-  return catui_connect("com.gulachek.html-forms", "0.1.0", err);
+html_connection html_connection_alloc() {
+  html_connection con = malloc(sizeof(struct html_connection_));
+  if (!con)
+    return NULL;
+
+  con->fd = -1;
+  return con;
+}
+
+void html_connection_free(html_connection *con) {
+  if (!(con && *con))
+    return;
+
+  free(*con);
+  *con = NULL;
+}
+
+int html_connect(html_connection con) {
+  if (!con)
+    return 0;
+
+  con->fd = catui_connect("com.gulachek.html-forms", "0.1.0", stderr);
+  if (con->fd == -1) {
+    // TODO - add error to connection
+    return 0;
+  }
+
+  return 1;
 }
 
 int html_encode_upload(void *data, size_t size, const char *url,
@@ -42,11 +69,16 @@ int html_encode_upload(void *data, size_t size, const char *url,
   return strlen(data);
 }
 
-int html_upload(int fd, const char *url, const char *file_path,
+int html_upload(html_connection con, const char *url, const char *file_path,
                 const char *mime_type) {
+  if (!con)
+    return 0;
+
+  int fd = con->fd;
+
   struct stat stats;
   if (stat(file_path, &stats) == -1) {
-    return -1;
+    return 0;
   }
 
   char buf[HTML_MSG_SIZE];
@@ -55,28 +87,28 @@ int html_upload(int fd, const char *url, const char *file_path,
     return n;
 
   if (msgstream_fd_send(fd, buf, sizeof(buf), n))
-    return -1;
+    return 0;
 
   FILE *f = fopen(file_path, "r");
   if (!f)
-    return -1;
+    return 0;
 
   size_t nleft = stats.st_size;
   while (nleft) {
     size_t n_to_read = HTML_MSG_SIZE < nleft ? HTML_MSG_SIZE : nleft;
     size_t nread = fread(buf, 1, n_to_read, f);
     if (nread == 0)
-      return -1;
+      return 0;
 
     nleft -= nread;
 
     if (write(fd, buf, nread) == -1) {
       perror("write");
-      return -1;
+      return 0;
     }
   }
 
-  return stats.st_size;
+  return 1;
 }
 
 int html_encode_navigate(void *data, size_t size, const char *url) {
@@ -99,16 +131,19 @@ int html_encode_navigate(void *data, size_t size, const char *url) {
   return strlen(data);
 }
 
-int html_navigate(int fd, const char *url) {
+int html_navigate(html_connection con, const char *url) {
+  if (!con)
+    return 0;
+
   char buf[HTML_MSG_SIZE];
   int n = html_encode_navigate(buf, sizeof(buf), url);
   if (n < 0)
-    return n;
+    return 0;
 
-  if (msgstream_fd_send(fd, buf, sizeof(buf), n))
-    return -1;
+  if (msgstream_fd_send(con->fd, buf, sizeof(buf), n))
+    return 0;
 
-  return n;
+  return 1;
 }
 
 int html_encode_js_message(void *data, size_t size, size_t content_length) {
@@ -131,7 +166,13 @@ int html_encode_js_message(void *data, size_t size, size_t content_length) {
   return strlen(data);
 }
 
-int html_send_js_message(int fd, const char *msg) {
+// TODO - return value to bool
+int html_send_js_message(html_connection con, const char *msg) {
+  if (!con)
+    return -1;
+
+  int fd = con->fd;
+
   char buf[HTML_MSG_SIZE];
   size_t msg_size = strlen(msg);
   int n = html_encode_js_message(buf, sizeof(buf), msg_size);
@@ -528,7 +569,13 @@ static int html_read_form_data(int fd, void *data, size_t size) {
   return nread;
 }
 
-int HTML_API html_recv_js_message(int fd, void *data, size_t size) {
+// TODO - return val to bool
+int HTML_API html_recv_js_message(html_connection con, void *data,
+                                  size_t size) {
+  if (!con)
+    return -1;
+
+  int fd = con->fd;
   uint8_t buf[HTML_MSG_SIZE];
   size_t n;
 
@@ -669,7 +716,10 @@ static int parse_field(char *buf, size_t size, int offset,
   return field_size;
 }
 
-int html_read_form(int fd, html_form *pform) {
+int html_read_form(html_connection con, html_form *pform) {
+  if (!con)
+    return -1;
+
   if (!pform)
     return -1;
 
@@ -677,7 +727,7 @@ int html_read_form(int fd, html_form *pform) {
     html_form_release(pform);
 
   char buf[HTML_FORM_SIZE];
-  int n = html_read_form_data(fd, buf, sizeof(buf));
+  int n = html_read_form_data(con->fd, buf, sizeof(buf));
   if (n < 1)
     return n;
 
