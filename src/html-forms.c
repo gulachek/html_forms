@@ -330,8 +330,7 @@ static int html_decode_submit_form_msg(cJSON *obj,
   return 1;
 }
 
-int HTML_API html_encode_recv_js_msg(void *data, size_t size,
-                                     size_t content_length) {
+int html_encode_recv_js_msg(void *data, size_t size, size_t content_length) {
   // size: number
 
   cJSON *obj = cJSON_CreateObject();
@@ -342,6 +341,21 @@ int HTML_API html_encode_recv_js_msg(void *data, size_t size,
     return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
+    return -1;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return -1;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
+int html_encode_close_request(void *data, size_t size) {
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return -1;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_IMSG_CLOSE_REQ))
     return -1;
 
   if (!cJSON_PrintPreallocated(obj, data, size, 0))

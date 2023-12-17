@@ -118,6 +118,8 @@ int HTML_API html_encode_submit_form(void *data, size_t size,
 int HTML_API html_encode_recv_js_msg(void *data, size_t size,
                                      size_t content_length);
 
+int HTML_API html_encode_close_request(void *data, size_t size);
+
 struct html_form_;
 typedef struct html_form_ *html_form;
 

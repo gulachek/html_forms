@@ -126,7 +126,7 @@ public:
   }
 
   void window_close_requested() override {
-    std::cerr << "Window close requested!!" << std::endl;
+    asio::post(stream_.get_executor(), bind(&self::request_close));
   }
 
 private:
@@ -184,6 +184,28 @@ private:
     default:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
+    }
+  }
+
+  void request_close() {
+    std::cerr << '[' << session_id_ << "] CLOSE-REQ" << std::endl;
+    submit_buf_.resize(HTML_MSG_SIZE);
+    int msg_size =
+        html_encode_close_request(submit_buf_.data(), submit_buf_.size());
+    if (msg_size < 0) {
+      std::cerr << "Failed to encode close msg" << std::endl;
+      return end_ws();
+    }
+
+    my::async_msgstream_send(stream_, asio::buffer(submit_buf_), msg_size,
+                             bind(&self::on_request_close));
+  }
+
+  void on_request_close(std::error_condition ec, std::size_t n) {
+    if (ec) {
+      std::cerr << "Failed to send close request: " << ec.message()
+                << std::endl;
+      return end_catui();
     }
   }
 
