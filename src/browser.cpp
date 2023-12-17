@@ -30,22 +30,7 @@ void browser::run() {
 }
 
 void browser::do_recv() {
-  std::cerr << "Trying to receive browser message" << std::endl;
   async_msgstream_recv(stdout_, asio::buffer(in_buf_), bind(&browser::on_recv));
-  /*
-stdout_.async_read_some(
-asio::buffer(in_buf_), [this](std::error_code ec, std::size_t n) {
-  if (ec) {
-    std::cerr << "Browser failed to read message: " << ec.message()
-              << std::endl;
-    return;
-  }
-
-  std::string_view msg{(char *)in_buf_.data(), n};
-  std::cerr << "read some bytes from browser: " << msg << std::endl;
-  do_recv();
-});
-                  */
 }
 
 void browser::on_recv(std::error_condition ec, std::size_t n) {
@@ -57,8 +42,6 @@ void browser::on_recv(std::error_condition ec, std::size_t n) {
   }
 
   std::string_view msg{(char *)in_buf_.data(), n};
-  std::cerr << "Received browser message: " << msg << std::endl;
-
   auto obj = json::parse(msg).as_object();
   auto type = obj["type"].as_string();
   if (type == "close") {
@@ -70,8 +53,11 @@ void browser::on_recv(std::error_condition ec, std::size_t n) {
       return;
     }
 
-    if (auto win_ptr = it->second.lock())
+    if (auto win_ptr = it->second.lock()) {
       win_ptr->window_close_requested();
+    } else {
+      watchers_.erase(it);
+    }
   } else {
     std::cerr << "Unexpected message from browser: " << type << std::endl;
     return;
