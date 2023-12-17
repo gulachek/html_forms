@@ -390,6 +390,8 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
   } else if (type_val == HTML_RECV_JS_MSG) {
     msg->type = HTML_RECV_JS_MSG;
     ret = html_decode_recv_js_msg(obj, &msg->msg.js_msg);
+  } else if (type_val == HTML_IMSG_CLOSE_REQ) {
+    msg->type = HTML_IMSG_CLOSE_REQ;
   } else {
     goto fail;
   }
@@ -535,38 +537,42 @@ int html_parse_target(const char *target, char *session_id,
   return 1;
 }
 
-static int html_read_form_data(int fd, void *data, size_t size) {
+static int html_read_form_data(int fd, void *data, size_t size,
+                               size_t *pnread) {
   uint8_t buf[HTML_MSG_SIZE];
   size_t n;
   if (msgstream_fd_recv(fd, buf, sizeof(buf), &n))
-    return -1;
+    return HTML_ERROR;
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg))
-    return -1;
+    return HTML_ERROR;
 
-  if (msg.type != HTML_SUBMIT_FORM)
-    return -1;
+  if (msg.type != HTML_SUBMIT_FORM) {
+    return msg.type == HTML_IMSG_CLOSE_REQ ? HTML_CLOSE_REQ : HTML_ERROR;
+  }
 
   struct html_begin_submit_form *form = &msg.msg.form;
   if (strcmp(form->mime_type, "application/x-www-form-urlencoded") != 0) {
-    return -1;
+    return HTML_ERROR;
   }
 
   if (form->content_length + 1 > size)
-    return -1;
+    return HTML_ERROR;
 
   int nread = 0;
   while (nread < form->content_length) {
     ssize_t ret = read(fd, data + nread, form->content_length - nread);
     if (ret < 1)
-      return -1;
+      return HTML_ERROR;
 
     nread += ret;
   }
 
   ((char *)data)[nread] = '\0';
-  return nread;
+
+  *pnread = nread;
+  return HTML_OK;
 }
 
 // TODO - return val to bool
@@ -721,12 +727,12 @@ enum html_error_code html_read_form(html_connection con, html_form *pform) {
     return HTML_ERROR;
 
   char buf[HTML_FORM_SIZE];
-  int n = html_read_form_data(con->fd, buf, sizeof(buf));
-  if (n < 1) {
-    return n == 0 ? HTML_OK : HTML_ERROR;
-  }
+  size_t n;
+  int ec = html_read_form_data(con->fd, buf, sizeof(buf), &n);
+  if (ec != HTML_OK)
+    return ec;
 
-  int nfields = 1;
+  int nfields = n > 0 ? 1 : 0;
   for (int i = 0; i < n; ++i) {
     if (buf[i] == '&')
       ++nfields;

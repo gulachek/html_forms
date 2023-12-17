@@ -59,7 +59,11 @@ struct html_out_msg {
   } msg;
 };
 
-enum html_in_msg_type { HTML_SUBMIT_FORM = 0, HTML_RECV_JS_MSG = 1 };
+enum html_in_msg_type {
+  HTML_SUBMIT_FORM = 0,
+  HTML_RECV_JS_MSG = 1,
+  HTML_IMSG_CLOSE_REQ = 2,
+};
 
 struct html_begin_submit_form {
   size_t content_length;
