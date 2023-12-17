@@ -11,6 +11,7 @@ using load_url_handler = browser::load_url_handler;
 using close_window_handler = browser::close_window_handler;
 using lock_ptr = async_mutex<asio::any_io_executor>::lock_ptr;
 using window_id = browser::window_id;
+using window_watcher = browser::window_watcher;
 
 #define BUF_SIZE 2048
 
@@ -19,6 +20,76 @@ browser::browser(asio::io_context &ioc)
       next_window_id_{1}, mtx_{ioc.get_executor()} {
   argv_ = BROWSER_ARGS;
   in_buf_.resize(BUF_SIZE);
+}
+
+void browser::run() {
+  proc_ = std::make_shared<bp::child>(exe_, argv_,
+                                      bp::std_in<stdin_, bp::std_out> stdout_);
+
+  asio::post(stdout_.get_executor(), bind(&browser::do_recv));
+}
+
+void browser::do_recv() {
+  std::cerr << "Trying to receive browser message" << std::endl;
+  async_msgstream_recv(stdout_, asio::buffer(in_buf_), bind(&browser::on_recv));
+  /*
+stdout_.async_read_some(
+asio::buffer(in_buf_), [this](std::error_code ec, std::size_t n) {
+  if (ec) {
+    std::cerr << "Browser failed to read message: " << ec.message()
+              << std::endl;
+    return;
+  }
+
+  std::string_view msg{(char *)in_buf_.data(), n};
+  std::cerr << "read some bytes from browser: " << msg << std::endl;
+  do_recv();
+});
+                  */
+}
+
+void browser::on_recv(std::error_condition ec, std::size_t n) {
+  if (ec) {
+    std::cerr << "Browser failed to read message: " << ec.message()
+              << std::endl;
+    // TODO - need to crash or something. this isn't good
+    return;
+  }
+
+  std::string_view msg{(char *)in_buf_.data(), n};
+  std::cerr << "Received browser message: " << msg << std::endl;
+
+  auto obj = json::parse(msg).as_object();
+  auto type = obj["type"].as_string();
+  if (type == "close") {
+    int window = obj["windowId"].as_int64();
+    auto it = watchers_.find(window);
+    if (it == watchers_.end()) {
+      std::cerr << "Attempting to close window that has no watcher: " << window
+                << std::endl;
+      return;
+    }
+
+    if (auto win_ptr = it->second.lock())
+      win_ptr->window_close_requested();
+  } else {
+    std::cerr << "Unexpected message from browser: " << type << std::endl;
+    return;
+  }
+
+  do_recv();
+}
+
+window_id
+browser::reserve_window(const std::weak_ptr<window_watcher> &watcher) {
+  auto win = next_window_id_++;
+  watchers_[win] = watcher;
+  return win;
+}
+
+void browser::release_window(window_id window) {
+  watchers_.erase(window);
+  async_close_window(window, [](std::error_condition) {});
 }
 
 void browser::send_msg(
@@ -34,30 +105,19 @@ void browser::send_msg(
                        out_buf_.size(), cb);
 }
 
-window_id browser::async_load_url(const std::string_view &url,
-                                  const std::optional<window_id> &window,
-                                  const std::function<load_url_handler> &cb) {
-  proc();
+void browser::async_load_url(window_id window, const std::string_view &url,
+                             const std::function<load_url_handler> &cb) {
 
-  window_id win;
-  if (window) {
-    win = *window;
-  } else {
-    win = next_window_id_++;
-  }
+  load_url_handlers_[window] = cb;
 
-  mtx_.async_lock([this, cb, win, url = std::string{url}](lock_ptr lock) {
-    load_url_handlers_[win] = cb;
-
+  mtx_.async_lock([this, window, url = std::string{url}](lock_ptr lock) {
     json::object obj;
     obj["type"] = "open";
     obj["url"] = url;
-    obj["windowId"] = win;
+    obj["windowId"] = window;
 
-    send_msg(obj, bind(&browser::on_write_url, win, lock));
+    send_msg(obj, bind(&browser::on_write_url, window, lock));
   });
-
-  return win;
 }
 
 void browser::on_write_url(window_id window, lock_ptr lock,
@@ -84,11 +144,4 @@ void browser::async_close_window(
   });
 }
 
-std::shared_ptr<bp::child> browser::proc() {
-  if (!proc_) {
-    proc_ = std::make_shared<bp::child>(
-        exe_, argv_, bp::std_in<stdin_, bp::std_out> stdout_);
-  }
-
-  return proc_;
-}
+browser::window_watcher::~window_watcher() {}

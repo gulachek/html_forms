@@ -42,7 +42,8 @@ concept member_fn_of =
     requires(Fn fp, Class *inst) { std::bind_front(fp, inst); };
 
 class catui_connection : public std::enable_shared_from_this<catui_connection>,
-                         public http_session {
+                         public http_session,
+                         public browser::window_watcher {
   using self = catui_connection;
 
   my::stream_descriptor stream_;
@@ -54,7 +55,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   beast::flat_buffer ws_buf_;
   std::string ws_send_buf_;
   browser &browser_;
-  std::optional<browser::window_id> window_id_;
+  browser::window_id window_id_;
 
   std::shared_ptr<my::ws_stream> ws_;
 
@@ -69,12 +70,18 @@ public:
                    const std::shared_ptr<http_listener> &http, browser &browsr)
       : stream_{std::move(stream)}, http_{http}, browser_{browsr} {}
 
-  ~catui_connection() { http_->remove_session(session_id_); }
+  ~catui_connection() {
+    std::cerr << "Destructor for session " << session_id_ << std::endl;
+    http_->remove_session(session_id_);
+    browser_.release_window(window_id_);
+  }
 
   // Start the asynchronous operation
   void run() {
     // TODO - thread safety on http_ ptr
     session_id_ = http_->add_session(weak_from_this());
+    // TODO - weak from this
+    window_id_ = browser_.reserve_window(weak_from_this());
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
   }
 
@@ -116,6 +123,10 @@ public:
 
     ws_ = my::make_ws_ptr(std::move(sock));
     my::async_ws_accept(*ws_, req, bind(&self::on_ws_accept));
+  }
+
+  void window_close_requested() override {
+    std::cerr << "Window close requested!!" << std::endl;
   }
 
 private:
@@ -195,13 +206,8 @@ private:
 
   void end_catui() {
     stream_.close();
-
-    if (window_id_) {
-      browser_.async_close_window(*window_id_, bind(&self::on_close_window));
-    }
+    ws_->close(beast::websocket::close_code::none);
   }
-
-  void on_close_window(std::error_condition ec) {}
 
   void do_ws_read() {
     if (!ws_) {
@@ -434,8 +440,7 @@ private:
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     std::cerr << "Opening " << os.str() << std::endl;
 
-    window_id_ =
-        browser_.async_load_url(os.str(), window_id_, bind(&self::on_load_url));
+    browser_.async_load_url(window_id_, os.str(), bind(&self::on_load_url));
   }
 
   void on_load_url(std::error_condition ec) {
@@ -484,6 +489,7 @@ int main(int argc, char *argv[]) {
   asio::io_context ioc{};
 
   browser browsr{ioc};
+  browsr.run();
 
   // Create and launch a listening port
   auto http =

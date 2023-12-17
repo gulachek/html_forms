@@ -27,7 +27,6 @@ function waitReadable(stream: Readable): Promise<void> {
 	});
 
 	const onReadable = () => {
-		console.log('readable event');
 		resolve();
 		stream.off('readable', onReadable);
 	};

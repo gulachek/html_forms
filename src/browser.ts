@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron';
-import { recv } from './MsgStream';
+import { recv, send } from './MsgStream';
 
 const BUF_SIZE = 2048;
 
@@ -17,6 +17,12 @@ interface CloseMessage {
 }
 
 type OutputMessage = OpenMessage | CloseMessage;
+type InputMessage = CloseMessage;
+
+async function sendMsg(msg: InputMessage) {
+	const buf = Buffer.from(JSON.stringify(msg));
+	await send(process.stdout, buf, BUF_SIZE);
+}
 
 // work w/ async io
 process.stdin.pause();
@@ -37,6 +43,11 @@ app.whenReady().then(async () => {
 			if (!win) {
 				win = new BrowserWindow();
 				windows.set(windowId, win);
+
+				win.on('close', (e) => {
+					e.preventDefault(); // let app do closing
+					sendMsg({ type: 'close', windowId });
+				});
 			}
 
 			win.loadURL(url);

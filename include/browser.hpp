@@ -9,15 +9,24 @@
 class browser {
 public:
   using window_id = int;
+
+  struct window_watcher {
+    virtual ~window_watcher();
+    virtual void window_close_requested() = 0;
+  };
+
   using load_url_handler = void(std::error_condition);
   using close_window_handler = void(std::error_condition);
   using lock_ptr = async_mutex<boost::asio::any_io_executor>::lock_ptr;
 
   browser(boost::asio::io_context &ioc);
 
-  window_id async_load_url(const std::string_view &url,
-                           const std::optional<window_id> &window,
-                           const std::function<load_url_handler> &cb);
+  void run();
+  window_id reserve_window(const std::weak_ptr<window_watcher> &watcher);
+  void release_window(window_id window);
+
+  void async_load_url(window_id window, const std::string_view &url,
+                      const std::function<load_url_handler> &cb);
 
   void async_close_window(window_id window,
                           const std::function<close_window_handler> &cb);
@@ -28,7 +37,8 @@ private:
                            std::forward<Args>(args)...);
   }
 
-  std::shared_ptr<boost::process::child> proc();
+  void do_recv();
+  void on_recv(std::error_condition ec, std::size_t n);
 
   void on_write_url(window_id window, lock_ptr lock, std::error_condition ec,
                     std::size_t n);
@@ -51,6 +61,7 @@ private:
 
   std::atomic<window_id> next_window_id_;
   std::map<window_id, std::function<load_url_handler>> load_url_handlers_;
+  std::map<window_id, std::weak_ptr<window_watcher>> watchers_;
 };
 
 #endif
