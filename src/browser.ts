@@ -24,6 +24,37 @@ async function sendMsg(msg: InputMessage) {
 	await send(process.stdout, buf, BUF_SIZE);
 }
 
+function makeWindow(windowId: number): BrowserWindow {
+	const win = new BrowserWindow();
+
+	win.on('close', (e) => {
+		e.preventDefault(); // let app do closing
+		sendMsg({ type: 'close', windowId });
+	});
+
+	win.webContents.on('before-input-event', (e, input) => {
+		if (input.type !== 'keyDown') return;
+		if (
+			input.key !== 'F12' ||
+			input.alt ||
+			input.control ||
+			input.shift ||
+			input.meta ||
+			input.isAutoRepeat
+		)
+			return;
+
+		e.preventDefault();
+		if (win.webContents.isDevToolsOpened()) {
+			win.webContents.closeDevTools();
+		} else {
+			win.webContents.openDevTools();
+		}
+	});
+
+	return win;
+}
+
 // work w/ async io
 process.stdin.pause();
 
@@ -41,33 +72,8 @@ app.whenReady().then(async () => {
 			let win = windows.get(windowId);
 
 			if (!win) {
-				win = new BrowserWindow();
+				win = makeWindow(windowId);
 				windows.set(windowId, win);
-
-				win.on('close', (e) => {
-					e.preventDefault(); // let app do closing
-					sendMsg({ type: 'close', windowId });
-				});
-
-				win.webContents.on('before-input-event', (e, input) => {
-					if (input.type !== 'keyDown') return;
-					if (
-						input.key !== 'F12' ||
-						input.alt ||
-						input.control ||
-						input.shift ||
-						input.meta ||
-						input.isAutoRepeat
-					)
-						return;
-
-					e.preventDefault();
-					if (win.webContents.isDevToolsOpened()) {
-						win.webContents.closeDevTools();
-					} else {
-						win.webContents.openDevTools();
-					}
-				});
 			}
 
 			win.loadURL(url);
