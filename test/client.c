@@ -69,20 +69,20 @@ int main() {
 }
 
 int upload_files(html_connection con) {
-  if (!html_upload(con, "/index.html", "./test/index.html", "text/html"))
+  if (!html_upload(con, "/index.html", "./test/index.html"))
     return 0;
 
-  if (!html_upload(con, "/index.css", "./test/index.css", "text/css")) {
+  if (!html_upload(con, "/index.css", "./test/index.css")) {
     return 0;
   }
 
-  if (!html_upload(con, "/favicon.ico", "./test/favicon.ico", "image/x-icon"))
+  if (!html_upload(con, "/favicon.ico", "./test/favicon.ico"))
     return 0;
 
-  if (!html_upload(con, "/other.html", "./test/other.html", "text/html"))
+  if (!html_upload(con, "/other.html", "./test/other.html"))
     return 0;
 
-  if (!html_upload(con, "/other.js", "./test/other.js", "text/javascript"))
+  if (!html_upload(con, "/other.js", "./test/other.js"))
     return 0;
 
   return 1;

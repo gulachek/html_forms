@@ -41,9 +41,8 @@ int html_connect(html_connection con) {
 }
 
 int html_encode_upload(void *data, size_t size, const char *url,
-                       size_t content_length, const char *mime_type) {
+                       size_t content_length) {
   // url: string
-  // mime: string
   // size: number
 
   cJSON *obj = cJSON_CreateObject();
@@ -56,9 +55,6 @@ int html_encode_upload(void *data, size_t size, const char *url,
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
     return -1;
 
-  if (!cJSON_AddStringToObject(obj, "mime", mime_type))
-    return -1;
-
   if (!cJSON_AddStringToObject(obj, "url", url))
     return -1;
 
@@ -69,8 +65,7 @@ int html_encode_upload(void *data, size_t size, const char *url,
   return strlen(data);
 }
 
-int html_upload(html_connection con, const char *url, const char *file_path,
-                const char *mime_type) {
+int html_upload(html_connection con, const char *url, const char *file_path) {
   if (!con)
     return 0;
 
@@ -82,7 +77,7 @@ int html_upload(html_connection con, const char *url, const char *file_path,
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, mime_type);
+  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size);
   if (n < 0)
     return n;
 
@@ -204,12 +199,8 @@ static int copy_string(cJSON *obj, const char *prop, char *out,
 
 static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   // url: string
-  // mime: string
   // size: number
   if (!copy_string(obj, "url", msg->url, sizeof(msg->url)))
-    return 0;
-
-  if (!copy_string(obj, "mime", msg->mime_type, sizeof(msg->mime_type)))
     return 0;
 
   cJSON *size = cJSON_GetObjectItem(obj, "size");

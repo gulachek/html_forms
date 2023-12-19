@@ -39,7 +39,6 @@ typedef char html_form_buf[HTML_FORM_SIZE];
 struct begin_upload {
   size_t content_length;
   html_url_buf url;
-  html_mime_buf mime_type;
 };
 
 struct navigate {
@@ -91,10 +90,10 @@ void HTML_API html_connection_free(html_connection *con);
 int HTML_API html_connect(html_connection con);
 
 int HTML_API html_encode_upload(void *data, size_t size, const char *url,
-                                size_t content_length, const char *mime_type);
+                                size_t content_length);
 
 int HTML_API html_upload(html_connection con, const char *url,
-                         const char *file_path, const char *mime_type);
+                         const char *file_path);
 
 int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 
