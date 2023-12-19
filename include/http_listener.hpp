@@ -18,6 +18,7 @@ struct http_session {
 class http_listener : public std::enable_shared_from_this<http_listener> {
   boost::asio::io_context &ioc_;
   boost::asio::ip::tcp::acceptor acceptor_;
+  boost::uuids::random_generator session_generator_;
   std::map<std::string, std::weak_ptr<http_session>> sessions_;
 
 public:

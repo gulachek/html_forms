@@ -212,7 +212,11 @@ http_listener::http_listener(asio::io_context &ioc, tcp::endpoint endpoint)
 void http_listener::run() { do_accept(); }
 
 std::string http_listener::add_session(std::weak_ptr<http_session> session) {
-  auto it = sessions_.emplace(std::make_pair("test", session));
+  boost::uuids::uuid uuid{session_generator_()};
+  std::ostringstream os;
+  os << uuid;
+
+  auto it = sessions_.emplace(std::make_pair(os.str(), session));
   return it.first->first;
 }
 
