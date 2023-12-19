@@ -16,6 +16,7 @@
 #include "browser.hpp"
 #include "html-forms.h"
 #include "http_listener.hpp"
+#include "mime_type.hpp"
 #include "my-asio.hpp"
 #include "my-beast.hpp"
 #include "open-url.hpp"
@@ -31,10 +32,6 @@ namespace http = beast::http;
 namespace json = boost::json;
 
 using asio::ip::tcp;
-
-struct upload_file {
-  std::string mime_type;
-};
 
 template <typename Fn, typename Class>
 concept member_fn_of =
@@ -57,7 +54,6 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   browser::window_id window_id_;
 
   boost::uuids::name_generator_sha1 name_gen_{boost::uuids::ns::url()};
-  std::map<std::string, upload_file> uploads_;
   const std::filesystem::path &all_sessions_dir_;
   std::filesystem::path docroot_;
 
@@ -410,19 +406,19 @@ private:
 
   my::string_response respond_get(const std::string_view &target,
                                   my::string_request &&req) {
-    auto upload_it = uploads_.find(std::string{target});
-    if (upload_it == uploads_.end())
-      return respond404(std::move(req));
-
     my::string_response res{http::status::ok, req.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     res.keep_alive(req.keep_alive());
 
-    const auto &upload = upload_it->second;
     auto path = upload_path(target);
     auto size = std::filesystem::file_size(path);
 
-    res.set(http::field::content_type, upload.mime_type);
+    if (!std::filesystem::exists(path))
+      return respond404(std::move(req));
+
+    auto mime = mime_type(target);
+
+    res.set(http::field::content_type, mime);
     res.content_length(size);
 
     // Respond to HEAD request
@@ -469,8 +465,6 @@ private:
   }
 
   void do_read_upload(const begin_upload &msg) {
-    auto &upload = uploads_[msg.url];
-    upload.mime_type = msg.mime_type;
     auto contents = std::make_shared<std::string>();
     contents->resize(msg.content_length);
     auto path = upload_path(msg.url);
