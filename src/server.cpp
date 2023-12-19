@@ -19,6 +19,7 @@
 #include "my-asio.hpp"
 #include "my-beast.hpp"
 #include "open-url.hpp"
+#include <filesystem>
 
 extern "C" {
 #include <catui.h>
@@ -32,7 +33,6 @@ namespace json = boost::json;
 using asio::ip::tcp;
 
 struct upload_file {
-  std::vector<std::uint8_t> contents;
   std::string mime_type;
 };
 
@@ -48,7 +48,6 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
 
   my::stream_descriptor stream_;
   std::vector<std::uint8_t> buf_;
-  std::map<std::string, upload_file> uploads_;
   std::shared_ptr<http_listener> http_;
   std::string session_id_;
   std::vector<std::uint8_t> submit_buf_;
@@ -56,6 +55,11 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::string ws_send_buf_;
   browser &browser_;
   browser::window_id window_id_;
+
+  boost::uuids::name_generator_sha1 name_gen_{boost::uuids::ns::url()};
+  std::map<std::string, upload_file> uploads_;
+  const std::filesystem::path &all_sessions_dir_;
+  std::filesystem::path docroot_;
 
   std::shared_ptr<my::ws_stream> ws_;
 
@@ -67,13 +71,17 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
 
 public:
   catui_connection(my::stream_descriptor &&stream,
-                   const std::shared_ptr<http_listener> &http, browser &browsr)
-      : stream_{std::move(stream)}, http_{http}, browser_{browsr} {}
+                   const std::shared_ptr<http_listener> &http, browser &browsr,
+                   const std::filesystem::path &all_sessions_dir)
+      : stream_{std::move(stream)}, http_{http}, browser_{browsr},
+        all_sessions_dir_{all_sessions_dir} {}
 
   ~catui_connection() {
     std::cerr << "Destructor for session " << session_id_ << std::endl;
     http_->remove_session(session_id_);
     browser_.release_window(window_id_);
+
+    std::filesystem::remove_all(docroot_);
   }
 
   // Start the asynchronous operation
@@ -82,6 +90,11 @@ public:
     session_id_ = http_->add_session(weak_from_this());
     // TODO - weak from this
     window_id_ = browser_.reserve_window(weak_from_this());
+
+    docroot_ = all_sessions_dir_ / session_id_;
+    std::filesystem::create_directory(docroot_);
+    std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
+
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
   }
 
@@ -387,6 +400,14 @@ private:
     }
   }
 
+  std::filesystem::path upload_path(const std::string_view &url) const {
+    auto uuid = name_gen_(url.data(), url.size());
+    std::ostringstream os;
+    os << uuid;
+    auto path = docroot_ / os.str();
+    return path;
+  }
+
   my::string_response respond_get(const std::string_view &target,
                                   my::string_request &&req) {
     auto upload_it = uploads_.find(std::string{target});
@@ -398,9 +419,11 @@ private:
     res.keep_alive(req.keep_alive());
 
     const auto &upload = upload_it->second;
+    auto path = upload_path(target);
+    auto size = std::filesystem::file_size(path);
 
     res.set(http::field::content_type, upload.mime_type);
-    res.content_length(upload.contents.size());
+    res.content_length(size);
 
     // Respond to HEAD request
     if (req.method() == http::verb::head) {
@@ -409,7 +432,12 @@ private:
     }
 
     if (req.method() == http::verb::get) {
-      res.body() = std::string{upload.contents.begin(), upload.contents.end()};
+      std::ifstream upload_file{path};
+      std::string upload_content;
+      upload_content.resize(size);
+      upload_file.read(upload_content.data(), size);
+      upload_file.close();
+      res.body() = std::move(upload_content);
     }
 
     // Send the response
@@ -443,16 +471,25 @@ private:
   void do_read_upload(const begin_upload &msg) {
     auto &upload = uploads_[msg.url];
     upload.mime_type = msg.mime_type;
-    upload.contents.resize(msg.content_length);
-    my::async_readn(stream_, asio::buffer(upload.contents), msg.content_length,
-                    bind(&self::on_read_upload));
+    auto contents = std::make_shared<std::string>();
+    contents->resize(msg.content_length);
+    auto path = upload_path(msg.url);
+    my::async_readn(stream_, asio::buffer(*contents), msg.content_length,
+                    bind(&self::on_read_upload, path, contents));
   }
 
-  void on_read_upload(std::error_code ec, std::size_t n) {
+  void on_read_upload(std::filesystem::path path,
+                      std::shared_ptr<std::string> contents, std::error_code ec,
+                      std::size_t n) {
     if (ec) {
       std::cerr << "Error reading upload: " << ec.message() << std::endl;
       return end_catui();
     }
+
+    std::ofstream of{path};
+    // TODO - error handling
+    of.write(contents->data(), n);
+    of.close();
 
     do_recv();
   }
@@ -507,6 +544,13 @@ int main(int argc, char *argv[]) {
   auto const address = asio::ip::make_address("127.0.0.1");
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
 
+  // make sure we have a directory to work with
+  auto temp_dir = std::filesystem::temp_directory_path();
+  auto session_dir = temp_dir / "com.gulachek.html-forms" / "session-content";
+  std::filesystem::create_directories(session_dir);
+
+  std::cerr << "[server] Writing content to " << session_dir << std::endl;
+
   // The io_context is required for all I/O
   asio::io_context ioc{};
 
@@ -523,7 +567,7 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  std::thread th{[&ioc, lb, http, &browsr]() {
+  std::thread th{[&ioc, lb, http, &browsr, &session_dir]() {
     while (true) {
       int client = catui_server_accept(lb, stderr);
       if (client < 0) {
@@ -533,7 +577,8 @@ int main(int argc, char *argv[]) {
       }
 
       auto con = std::make_shared<catui_connection>(
-          my::stream_descriptor{asio::make_strand(ioc), client}, http, browsr);
+          my::stream_descriptor{asio::make_strand(ioc), client}, http, browsr,
+          session_dir);
 
       con->run();
     }
