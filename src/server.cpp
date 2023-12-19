@@ -417,6 +417,8 @@ private:
       return respond404(std::move(req));
 
     auto mime = mime_type(target);
+    if (mime.empty())
+      return respond404(std::move(req));
 
     res.set(http::field::content_type, mime);
     res.content_length(size);
