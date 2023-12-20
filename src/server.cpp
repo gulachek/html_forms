@@ -411,7 +411,6 @@ private:
     res.keep_alive(req.keep_alive());
 
     auto path = upload_path(target);
-    auto size = std::filesystem::file_size(path);
 
     if (!std::filesystem::exists(path))
       return respond404(std::move(req));
@@ -421,6 +420,8 @@ private:
       return respond404(std::move(req));
 
     res.set(http::field::content_type, mime);
+
+    auto size = std::filesystem::file_size(path);
     res.content_length(size);
 
     // Respond to HEAD request

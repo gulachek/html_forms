@@ -39,7 +39,7 @@ int main() {
 
     printf("Response: %s\n", response);
 
-    if (!html_navigate(con, "/other.html")) {
+    if (!html_navigate(con, "/other/index.html")) {
       return 1;
     }
 
