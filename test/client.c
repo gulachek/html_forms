@@ -8,8 +8,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-int upload_files(html_connection con);
-
 int main() {
   html_connection con = html_connection_alloc();
   if (!con) {
@@ -22,7 +20,7 @@ int main() {
     return 1;
   }
 
-  if (!upload_files(con))
+  if (!html_upload_dir(con, "/", "./test/docroot"))
     return 1;
 
   html_form form = NULL;
@@ -66,28 +64,4 @@ int main() {
 
   html_form_release(&form);
   return 0;
-}
-
-int upload_files(html_connection con) {
-  if (!html_upload_dir(con, "/", "./test/docroot"))
-    return 0;
-  /*
-if (!html_upload_file(con, "/index.html", "./test/index.html"))
-return 0;
-
-if (!html_upload_file(con, "/index.css", "./test/index.css")) {
-return 0;
-}
-
-if (!html_upload_file(con, "/favicon.ico", "./test/favicon.ico"))
-return 0;
-
-if (!html_upload_file(con, "/other.html", "./test/other.html"))
-return 0;
-
-if (!html_upload_file(con, "/other.js", "./test/other.js"))
-return 0;
-          */
-
-  return 1;
 }
