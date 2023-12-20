@@ -425,6 +425,25 @@ private:
     return path;
   }
 
+  std::string_view mime_type_for(const std::string_view &url) const {
+    auto dot = url.rfind('.');
+    if (dot == std::string_view::npos)
+      return std::string_view{};
+
+    std::string ext;
+    ext.resize(url.size() - dot);
+
+    for (auto i = 0; i < ext.size(); ++i) {
+      ext[i] = std::tolower(url[dot + i]);
+    }
+
+    auto mime_it = mime_overrides_.find(ext);
+    if (mime_it == mime_overrides_.end())
+      return mime_type(ext);
+    else
+      return mime_it->second;
+  }
+
   my::string_response respond_get(const std::string_view &target,
                                   my::string_request &&req) {
     my::string_response res{http::status::ok, req.version()};
@@ -436,16 +455,7 @@ private:
     if (!std::filesystem::exists(path))
       return respond404(std::move(req));
 
-    std::string_view mime;
-
-    std::filesystem::path url_path{target};
-    auto mime_it = mime_overrides_.find(url_path.extension());
-    if (mime_it == mime_overrides_.end()) {
-      mime = mime_type(target);
-    } else {
-      mime = mime_it->second;
-    }
-
+    auto mime = mime_type_for(target);
     if (mime.empty())
       return respond404(std::move(req));
 

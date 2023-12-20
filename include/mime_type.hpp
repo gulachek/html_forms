@@ -3,6 +3,6 @@
 
 #include "asio-pch.hpp"
 
-boost::beast::string_view mime_type(boost::beast::string_view path);
+std::string_view mime_type(const std::string_view &ext);
 
 #endif

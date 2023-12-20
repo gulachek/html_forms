@@ -1,17 +1,8 @@
 #include "mime_type.hpp"
 
-namespace beast = boost::beast;
-
-beast::string_view mime_type(beast::string_view path) {
-  using beast::iequals;
-  auto const pos = path.rfind(".");
-  if (pos == beast::string_view::npos)
-    return beast::string_view{};
-
-  auto ext = path.substr(pos);
-
+std::string_view mime_type(const std::string_view &ext) {
 #define MAP(EXT, MIME)                                                         \
-  if (iequals(ext, EXT))                                                       \
+  if (ext == EXT)                                                              \
     return MIME;
 
   // text
