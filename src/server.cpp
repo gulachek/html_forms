@@ -53,6 +53,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   browser &browser_;
   browser::window_id window_id_;
 
+  std::map<std::string, std::string> mime_overrides_;
   boost::uuids::name_generator_sha1 name_gen_{boost::uuids::ns::url()};
   const std::filesystem::path &all_sessions_dir_;
   std::filesystem::path docroot_;
@@ -190,10 +191,30 @@ private:
     case HTML_JS_MESSAGE:
       do_send_js_msg(msg.msg.js_msg);
       break;
+    case HTML_MIME_MAP:
+      do_map_mimes(msg.msg.mime);
+      break;
     default:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
     }
+  }
+
+  void do_map_mimes(html_mime_map mimes) {
+    std::size_t n = html_mime_map_size(mimes);
+    for (std::size_t i = 0; i < n; ++i) {
+      const char *ext_c, *mime_c;
+      if (!html_mime_map_entry_at(mimes, i, &ext_c, &mime_c)) {
+        std::cerr << "failed to read mime entry" << std::endl;
+        break;
+      }
+
+      std::cerr << '[' << session_id_ << "] MIME " << ext_c << " -> " << mime_c
+                << std::endl;
+      mime_overrides_[ext_c] = mime_c;
+    }
+
+    do_recv();
   }
 
   void request_close() {
@@ -415,7 +436,16 @@ private:
     if (!std::filesystem::exists(path))
       return respond404(std::move(req));
 
-    auto mime = mime_type(target);
+    std::string_view mime;
+
+    std::filesystem::path url_path{target};
+    auto mime_it = mime_overrides_.find(url_path.extension());
+    if (mime_it == mime_overrides_.end()) {
+      mime = mime_type(target);
+    } else {
+      mime = mime_it->second;
+    }
+
     if (mime.empty())
       return respond404(std::move(req));
 

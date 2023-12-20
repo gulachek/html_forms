@@ -127,6 +127,11 @@ void HTML_API html_mime_map_free(html_mime_map *mimes);
 int HTML_API html_mime_map_add(html_mime_map mimes, const char *extname,
                                const char *mime_type);
 
+size_t HTML_API html_mime_map_size(html_mime_map mimes);
+int HTML_API html_mime_map_entry_at(html_mime_map mimes, size_t i,
+                                    const char **extname,
+                                    const char **mime_type);
+
 int HTML_API html_encode_upload_mime_map(void *data, size_t size,
                                          html_mime_map mimes);
 

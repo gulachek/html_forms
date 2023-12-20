@@ -13,6 +13,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+struct html_mime_map_ {
+  cJSON *array;
+};
+
 html_connection html_connection_alloc() {
   html_connection con = malloc(sizeof(struct html_connection_));
   if (!con)
@@ -329,6 +333,39 @@ static int html_decode_js_msg(cJSON *obj, struct js_message *msg) {
   return 1;
 }
 
+static int html_decode_mime_msg(cJSON *obj, html_mime_map mimes) {
+  if (!mimes)
+    return 0;
+
+  cJSON *map = cJSON_DetachItemFromObjectCaseSensitive(obj, "map");
+  if (!cJSON_IsArray(map)) {
+    goto fail;
+  }
+
+  cJSON *item;
+  cJSON_ArrayForEach(item, map) {
+    // [extname, mime]
+    if (cJSON_GetArraySize(item) != 2)
+      goto fail;
+
+    cJSON *ext = cJSON_GetArrayItem(item, 0);
+    if (!cJSON_IsString(ext))
+      goto fail;
+
+    cJSON *mime = cJSON_GetArrayItem(item, 1);
+    if (!cJSON_IsString(ext))
+      goto fail;
+  }
+
+  cJSON_Delete(mimes->array);
+  mimes->array = map;
+  return 1;
+
+fail:
+  cJSON_Delete(map);
+  return 0;
+}
+
 int html_decode_out_msg(const void *data, size_t size,
                         struct html_out_msg *msg) {
   // TODO error message for failure conditions
@@ -355,6 +392,10 @@ int html_decode_out_msg(const void *data, size_t size,
   } else if (type_val == HTML_JS_MESSAGE) {
     msg->type = HTML_JS_MESSAGE;
     ret = html_decode_js_msg(obj, &msg->msg.js_msg);
+  } else if (type_val == HTML_MIME_MAP) {
+    msg->type = HTML_MIME_MAP;
+    msg->msg.mime = html_mime_map_alloc();
+    ret = html_decode_mime_msg(obj, msg->msg.mime);
   } else {
     goto fail;
   }
@@ -906,10 +947,6 @@ const char *HTML_API html_form_value_of(const html_form form,
   return NULL;
 }
 
-struct html_mime_map_ {
-  cJSON *array;
-};
-
 html_mime_map HTML_API html_mime_map_alloc() {
   html_mime_map ptr = malloc(sizeof(struct html_mime_map_));
   if (!ptr)
@@ -1007,6 +1044,31 @@ int html_upload_mime_map(html_connection con, html_mime_map mimes) {
 
   if (msgstream_fd_send(con->fd, buf, sizeof(buf), n))
     return 0;
+
+  return 1;
+}
+
+size_t html_mime_map_size(html_mime_map mimes) {
+  if (!mimes)
+    return 0;
+  return cJSON_GetArraySize(mimes->array);
+}
+
+int html_mime_map_entry_at(html_mime_map mimes, size_t i, const char **extname,
+                           const char **mime_type) {
+  if (!mimes)
+    return 0;
+
+  if (i >= cJSON_GetArraySize(mimes->array))
+    return 0;
+
+  cJSON *item = cJSON_GetArrayItem(mimes->array, i);
+
+  cJSON *ext_str = cJSON_GetArrayItem(item, 0);
+  *extname = cJSON_GetStringValue(ext_str);
+
+  cJSON *mime_str = cJSON_GetArrayItem(item, 1);
+  *mime_type = cJSON_GetStringValue(mime_str);
 
   return 1;
 }
