@@ -20,7 +20,7 @@ int main() {
   if (!override_mimes(con))
     return 1;
 
-  if (!html_upload_dir(con, "/", "./test/mime_swap/docroot"))
+  if (!html_upload_dir(con, "/", "./example/mime_swap/docroot"))
     return 1;
 
   html_form form = NULL;

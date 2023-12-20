@@ -34,7 +34,7 @@ cli((book, opts) => {
 
 	const mimeSwap = c.addExecutable({
 		name: 'mime_swap',
-		src: ['test/mime_swap/main.c'],
+		src: ['example/mime_swap/main.c'],
 		link: [htmlLib],
 	});
 
