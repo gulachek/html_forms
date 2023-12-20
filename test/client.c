@@ -69,7 +69,7 @@ int main() {
 }
 
 int upload_files(html_connection con) {
-  if (!html_upload_dir(con, "", "./test/docroot"))
+  if (!html_upload_dir(con, "/", "./test/docroot"))
     return 0;
   /*
 if (!html_upload_file(con, "/index.html", "./test/index.html"))

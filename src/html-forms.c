@@ -124,19 +124,25 @@ int html_upload_dir(html_connection con, const char *url,
 #define PN sizeof(sub_path)
 #define UN sizeof(sub_url)
 
-  if (strlcpy(sub_path, dir_path, PN) >= PN)
-    return 0;
-
-  const size_t base_path_len = strlcat(sub_path, "/", PN);
+  size_t base_path_len = strlcpy(sub_path, dir_path, PN);
   if (base_path_len >= PN)
     return 0;
 
-  if (strlcpy(sub_url, url, UN) >= UN)
-    return 0;
+  if (sub_path[base_path_len - 1] != '/') {
+    base_path_len = strlcat(sub_path, "/", PN);
+    if (base_path_len >= PN)
+      return 0;
+  }
 
-  const size_t base_url_len = strlcat(sub_url, "/", UN);
+  size_t base_url_len = strlcpy(sub_url, url, UN);
   if (base_url_len >= UN)
     return 0;
+
+  if (sub_url[base_url_len - 1] != '/') {
+    base_url_len = strlcat(sub_url, "/", UN);
+    if (base_url_len >= UN)
+      return 0;
+  }
 
   struct dirent *entry;
   while ((entry = readdir(dir))) {
