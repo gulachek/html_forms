@@ -45,7 +45,7 @@ int override_mimes(html_connection con) {
     return 0;
   }
 
-  if (!html_mime_map_add(mimes, ".html", "text/css")) {
+  if (!html_mime_map_add(mimes, "html", "text/css")) {
     fprintf(stderr, "Failed to map .html -> text/css\n");
     return 0;
   }

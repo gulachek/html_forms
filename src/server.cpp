@@ -209,7 +209,7 @@ private:
         break;
       }
 
-      std::cerr << '[' << session_id_ << "] MIME " << ext_c << " -> " << mime_c
+      std::cerr << '[' << session_id_ << "] MIME ." << ext_c << " -> " << mime_c
                 << std::endl;
       mime_overrides_[ext_c] = mime_c;
     }
@@ -426,15 +426,18 @@ private:
   }
 
   std::string_view mime_type_for(const std::string_view &url) const {
-    auto dot = url.rfind('.');
-    if (dot == std::string_view::npos)
+    auto start = url.rfind('.');
+    if (start == std::string_view::npos)
       return std::string_view{};
 
+    // don't wastefully compare the dot
+    start += 1;
+
     std::string ext;
-    ext.resize(url.size() - dot);
+    ext.resize(url.size() - start);
 
     for (auto i = 0; i < ext.size(); ++i) {
-      ext[i] = std::tolower(url[dot + i]);
+      ext[i] = std::tolower(url[start + i]);
     }
 
     auto mime_it = mime_overrides_.find(ext);

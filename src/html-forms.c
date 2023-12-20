@@ -977,14 +977,18 @@ int html_mime_map_add(html_mime_map mimes, const char *extname,
   if (!(mimes && extname && mime_type))
     return 0;
 
-  if (strlen(extname) > 16 || strlen(mime_type) > HTML_MIME_SIZE)
+  size_t extlen = strlen(extname);
+  size_t mimelen = strlen(mime_type);
+
+  if (extlen < 1 || extlen > 16 || mimelen < 1 || mimelen > HTML_MIME_SIZE)
     return 0;
 
   cJSON *item = cJSON_CreateArray();
   if (!item)
     goto fail;
 
-  cJSON *ext = cJSON_CreateString(extname);
+  size_t offset = extname[0] == '.' ? 1 : 0;
+  cJSON *ext = cJSON_CreateString(extname + offset);
   if (!ext)
     goto fail;
 
