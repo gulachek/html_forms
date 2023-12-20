@@ -38,6 +38,15 @@ cli((book, opts) => {
 		link: [htmlLib],
 	});
 
+	const tarball = c.addExecutable({
+		name: 'tarball',
+		src: ['example/tarball/main.c'],
+		link: [htmlLib],
+	});
+
+	const example = Path.build('example');
+	book.add(example, [mimeSwap, tarball]);
+
 	const platformDef = {};
 	switch (platform()) {
 		case 'darwin':
@@ -121,7 +130,7 @@ cli((book, opts) => {
 
 	const cmds = c.addCompileCommands();
 
-	book.add('all', [client, cppServer, cmds, test, browserBundle, mimeSwap]);
+	book.add('all', [client, cppServer, cmds, test, browserBundle, example]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, cppServer);
