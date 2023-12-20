@@ -39,6 +39,7 @@ typedef char html_form_buf[HTML_FORM_SIZE];
 
 struct begin_upload {
   size_t content_length;
+  int is_archive;
   html_url_buf url;
 };
 
@@ -94,8 +95,8 @@ void HTML_API html_connection_free(html_connection *con);
 
 int HTML_API html_connect(html_connection con);
 
-int HTML_API html_encode_file_upload(void *data, size_t size, const char *url,
-                                     size_t content_length);
+int HTML_API html_encode_upload(void *data, size_t size, const char *url,
+                                size_t content_length, int is_archive);
 
 /**
  * Upload file to be accessible from URL
@@ -120,6 +121,16 @@ int HTML_API html_upload_file(html_connection con, const char *url,
  */
 int HTML_API html_upload_dir(html_connection con, const char *url,
                              const char *dir_path);
+
+/**
+ * Uploads archive (like archive.tar.gz) to make contents accessible from URL
+ * @param con The connection
+ * @param url The base URL of the archived directory
+ * @param archive_path The path to the archive on the application system
+ * @return 0 on failure, 1 on success
+ */
+int HTML_API html_upload_archive(html_connection con, const char *url,
+                                 const char *archive_path);
 
 html_mime_map HTML_API html_mime_map_alloc();
 void HTML_API html_mime_map_free(html_mime_map *mimes);

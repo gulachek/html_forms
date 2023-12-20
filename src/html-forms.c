@@ -47,10 +47,11 @@ int html_connect(html_connection con) {
   return 1;
 }
 
-int html_encode_file_upload(void *data, size_t size, const char *url,
-                            size_t content_length) {
+int html_encode_upload(void *data, size_t size, const char *url,
+                       size_t content_length, int is_archive) {
   // url: string
   // size: number
+  // archive: bool
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
@@ -65,6 +66,10 @@ int html_encode_file_upload(void *data, size_t size, const char *url,
   if (!cJSON_AddStringToObject(obj, "url", url))
     return -1;
 
+  if (!cJSON_AddBoolToObject(obj, "archive", !!is_archive)) {
+    return -1;
+  }
+
   if (!cJSON_PrintPreallocated(obj, data, size, 0))
     return -1;
 
@@ -72,8 +77,9 @@ int html_encode_file_upload(void *data, size_t size, const char *url,
   return strlen(data);
 }
 
-int html_upload_file(html_connection con, const char *url,
-                     const char *file_path) {
+static int html_send_upload(html_connection con, const char *url,
+                            const char *file_path, int is_archive) {
+
   if (!con)
     return 0;
 
@@ -85,7 +91,7 @@ int html_upload_file(html_connection con, const char *url,
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_file_upload(buf, sizeof(buf), url, stats.st_size);
+  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, is_archive);
   if (n < 0)
     return n;
 
@@ -112,6 +118,16 @@ int html_upload_file(html_connection con, const char *url,
   }
 
   return 1;
+}
+
+int html_upload_file(html_connection con, const char *url,
+                     const char *file_path) {
+  return html_send_upload(con, url, file_path, /* is_archive: */ 0);
+}
+
+int html_upload_archive(html_connection con, const char *url,
+                        const char *archive_path) {
+  return html_send_upload(con, url, archive_path, /* is_archive: */ 1);
 }
 
 int html_upload_dir(html_connection con, const char *url,
@@ -296,6 +312,7 @@ static int copy_string(cJSON *obj, const char *prop, char *out,
 static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   // url: string
   // size: number
+  // archive: bool
   if (!copy_string(obj, "url", msg->url, sizeof(msg->url)))
     return 0;
 
@@ -308,6 +325,11 @@ static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   msg->content_length = (size_t)size_val;
   if (msg->content_length != size_val)
     return 0;
+
+  msg->is_archive = 0;
+  cJSON *archive = cJSON_GetObjectItem(obj, "archive");
+  if (cJSON_IsTrue(archive))
+    msg->is_archive = 1;
 
   return 1;
 }

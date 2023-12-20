@@ -22,6 +22,7 @@
 #include "open-url.hpp"
 
 #include <archive.h>
+#include <archive_entry.h>
 #include <filesystem>
 
 extern "C" {
@@ -515,12 +516,14 @@ private:
   void do_read_upload(const begin_upload &msg) {
     auto contents = std::make_shared<std::string>();
     contents->resize(msg.content_length);
-    auto path = upload_path(msg.url);
+    std::cerr << '[' << session_id_ << "] UPLOAD " << msg.url << std::endl;
+
     my::async_readn(stream_, asio::buffer(*contents), msg.content_length,
-                    bind(&self::on_read_upload, path, contents));
+                    bind(&self::on_read_upload, msg.is_archive,
+                         std::make_shared<std::string>(msg.url), contents));
   }
 
-  void on_read_upload(std::filesystem::path path,
+  void on_read_upload(bool is_archive, std::shared_ptr<std::string> url,
                       std::shared_ptr<std::string> contents, std::error_code ec,
                       std::size_t n) {
     if (ec) {
@@ -528,10 +531,70 @@ private:
       return end_catui();
     }
 
-    std::ofstream of{path};
-    // TODO - error handling
-    of.write(contents->data(), n);
-    of.close();
+    if (is_archive) {
+      struct archive *a;
+      a = archive_read_new();
+      archive_read_support_filter_all(a);
+      archive_read_support_format_all(a);
+      int r = archive_read_open_memory(a, contents->data(), contents->size());
+      if (r != ARCHIVE_OK) {
+        std::cerr << "Failed to open archive " << archive_error_string(a)
+                  << std::endl;
+        return end_catui(); // fatal
+      }
+
+      struct archive_entry *entry;
+      while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+        mode_t type = archive_entry_filetype(entry);
+        if (type != AE_IFREG) // only upload regular files
+          continue;
+
+        std::ostringstream cat_url_ss;
+        cat_url_ss << *url;
+
+        std::string_view entry_pathname{archive_entry_pathname(entry)};
+
+        if (!(url->ends_with('/') || entry_pathname.starts_with('/')))
+          cat_url_ss << '/';
+
+        cat_url_ss << entry_pathname;
+        auto cat_url = cat_url_ss.str();
+        std::cerr << '[' << session_id_ << "] UPLOAD-ENTRY " << cat_url
+                  << std::endl;
+
+        auto path = upload_path(cat_url);
+        std::ofstream of{path};
+
+        const void *buffer;
+        std::size_t size;
+        std::int64_t offset;
+
+        while (true) {
+          r = archive_read_data_block(a, &buffer, &size, &offset);
+          if (r == ARCHIVE_EOF) {
+            break;
+          }
+          if (r < ARCHIVE_OK) {
+            std::cerr << "Error reading entry contents: "
+                      << archive_error_string(a) << std::endl;
+            return end_catui();
+          }
+
+          of.write(static_cast<const char *>(buffer), size);
+        }
+
+        of.close();
+      }
+
+      archive_read_free(a);
+
+    } else {
+      auto path = upload_path(*url);
+      std::ofstream of{path};
+      // TODO - error handling
+      of.write(contents->data(), n);
+      of.close();
+    }
 
     do_recv();
   }
@@ -608,9 +671,6 @@ int main(int argc, char *argv[]) {
   if (!lb) {
     return EXIT_FAILURE;
   }
-
-  struct archive *a;
-  a = archive_read_new();
 
   std::thread th{[&ioc, lb, http, &browsr, &session_dir]() {
     while (true) {
