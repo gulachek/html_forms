@@ -905,3 +905,108 @@ const char *HTML_API html_form_value_of(const html_form form,
 
   return NULL;
 }
+
+struct html_mime_map_ {
+  cJSON *array;
+};
+
+html_mime_map HTML_API html_mime_map_alloc() {
+  html_mime_map ptr = malloc(sizeof(struct html_mime_map_));
+  if (!ptr)
+    return NULL;
+
+  cJSON *array = cJSON_CreateArray();
+  if (!array) {
+    free(ptr);
+    return NULL;
+  }
+
+  ptr->array = array;
+  return ptr;
+}
+
+void HTML_API html_mime_map_free(html_mime_map *pmimes) {
+  if (!(pmimes && *pmimes))
+    return;
+
+  html_mime_map mimes = *pmimes;
+  cJSON_Delete(mimes->array);
+  free(mimes);
+  *pmimes = NULL;
+}
+
+int html_mime_map_add(html_mime_map mimes, const char *extname,
+                      const char *mime_type) {
+  if (!(mimes && extname && mime_type))
+    return 0;
+
+  if (strlen(extname) > 16 || strlen(mime_type) > HTML_MIME_SIZE)
+    return 0;
+
+  cJSON *item = cJSON_CreateArray();
+  if (!item)
+    goto fail;
+
+  cJSON *ext = cJSON_CreateString(extname);
+  if (!ext)
+    goto fail;
+
+  if (!cJSON_AddItemToArray(item, ext)) {
+    cJSON_Delete(ext);
+    goto fail;
+  }
+
+  cJSON *mime = cJSON_CreateString(mime_type);
+  if (!mime)
+    goto fail;
+
+  if (!cJSON_AddItemToArray(item, mime)) {
+    cJSON_Delete(mime);
+    goto fail;
+  }
+
+  if (!cJSON_AddItemToArray(mimes->array, item)) {
+    goto fail;
+  }
+
+  return 1;
+
+fail:
+  if (item)
+    cJSON_Delete(item);
+  return 0;
+}
+
+int html_encode_upload_mime_map(void *data, size_t size, html_mime_map mimes) {
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return -1;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_MIME_MAP))
+    return -1;
+
+  if (!cJSON_AddItemReferenceToObject(obj, "map", mimes->array)) {
+    return -1;
+  }
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return -1;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
+int html_upload_mime_map(html_connection con, html_mime_map mimes) {
+  if (!(con && mimes))
+    return 0;
+
+  char buf[HTML_MSG_SIZE];
+  int n = html_encode_upload_mime_map(buf, sizeof(buf), mimes);
+  if (n < 0)
+    return 0;
+
+  if (msgstream_fd_send(con->fd, buf, sizeof(buf), n))
+    return 0;
+
+  return 1;
+}

@@ -3,7 +3,7 @@
 
 #define HTML_MSG_SIZE 2048
 #define HTML_URL_SIZE 512
-#define HTML_MIME_SIZE 128
+#define HTML_MIME_SIZE 256
 #define HTML_FORM_SIZE 4096
 
 enum html_error_code {
@@ -29,7 +29,8 @@ extern "C" {
 enum html_out_msg_type {
   HTML_BEGIN_UPLOAD = 0,
   HTML_NAVIGATE = 1,
-  HTML_JS_MESSAGE = 2
+  HTML_JS_MESSAGE = 2,
+  HTML_MIME_MAP = 3
 };
 
 typedef char html_mime_buf[HTML_MIME_SIZE];
@@ -49,12 +50,16 @@ struct js_message {
   size_t content_length;
 };
 
+struct html_mime_map_;
+typedef struct html_mime_map_ *html_mime_map;
+
 struct html_out_msg {
   enum html_out_msg_type type;
   union {
     struct begin_upload upload;
     struct navigate navigate;
     struct js_message js_msg;
+    html_mime_map mime;
   } msg;
 };
 
@@ -115,6 +120,17 @@ int HTML_API html_upload_file(html_connection con, const char *url,
  */
 int HTML_API html_upload_dir(html_connection con, const char *url,
                              const char *dir_path);
+
+html_mime_map HTML_API html_mime_map_alloc();
+void HTML_API html_mime_map_free(html_mime_map *mimes);
+
+int HTML_API html_mime_map_add(html_mime_map mimes, const char *extname,
+                               const char *mime_type);
+
+int HTML_API html_encode_upload_mime_map(void *data, size_t size,
+                                         html_mime_map mimes);
+
+int HTML_API html_upload_mime_map(html_connection con, html_mime_map mimes);
 
 int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 
