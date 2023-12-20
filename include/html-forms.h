@@ -92,8 +92,29 @@ int HTML_API html_connect(html_connection con);
 int HTML_API html_encode_file_upload(void *data, size_t size, const char *url,
                                      size_t content_length);
 
+/**
+ * Upload file to be accessible from URL
+ * @param con The connection
+ * @param url The url that the file will be accessible from the browser
+ * @param file_path The file path on the application system to upload content
+ * for
+ * @return 0 on failure, 1 on success
+ */
 int HTML_API html_upload_file(html_connection con, const char *url,
                               const char *file_path);
+
+/**
+ * Recursively upload files to be accessible from URL
+ * @param con The connection
+ * @param url The base URL of the directory
+ * @param dir_path The path to the directory on the application system to
+ * iterate and upload content from
+ * @return 0 on failure, 1 on success
+ * @remark Hidden files that begin with '.' (like '.gitignore') will not be
+ * uploaded
+ */
+int HTML_API html_upload_dir(html_connection con, const char *url,
+                             const char *dir_path);
 
 int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 

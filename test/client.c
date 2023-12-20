@@ -69,21 +69,25 @@ int main() {
 }
 
 int upload_files(html_connection con) {
-  if (!html_upload_file(con, "/index.html", "./test/index.html"))
+  if (!html_upload_dir(con, "", "./test/docroot"))
     return 0;
+  /*
+if (!html_upload_file(con, "/index.html", "./test/index.html"))
+return 0;
 
-  if (!html_upload_file(con, "/index.css", "./test/index.css")) {
-    return 0;
-  }
+if (!html_upload_file(con, "/index.css", "./test/index.css")) {
+return 0;
+}
 
-  if (!html_upload_file(con, "/favicon.ico", "./test/favicon.ico"))
-    return 0;
+if (!html_upload_file(con, "/favicon.ico", "./test/favicon.ico"))
+return 0;
 
-  if (!html_upload_file(con, "/other.html", "./test/other.html"))
-    return 0;
+if (!html_upload_file(con, "/other.html", "./test/other.html"))
+return 0;
 
-  if (!html_upload_file(con, "/other.js", "./test/other.js"))
-    return 0;
+if (!html_upload_file(con, "/other.js", "./test/other.js"))
+return 0;
+          */
 
   return 1;
 }

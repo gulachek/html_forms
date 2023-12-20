@@ -5,8 +5,11 @@
 #include <catui.h>
 #include <cjson/cJSON.h>
 #include <ctype.h>
+#include <limits.h>
 #include <string.h>
 
+#include <dirent.h>
+#include <sys/dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -105,6 +108,88 @@ int html_upload_file(html_connection con, const char *url,
   }
 
   return 1;
+}
+
+int html_upload_dir(html_connection con, const char *url,
+                    const char *dir_path) {
+  if (!(con && url && dir_path))
+    return 0;
+
+  DIR *dir = opendir(dir_path);
+  if (!dir)
+    return 0;
+
+  char sub_path[PATH_MAX];
+  char sub_url[HTML_URL_SIZE];
+#define PN sizeof(sub_path)
+#define UN sizeof(sub_url)
+
+  if (strlcpy(sub_path, dir_path, PN) >= PN)
+    return 0;
+
+  const size_t base_path_len = strlcat(sub_path, "/", PN);
+  if (base_path_len >= PN)
+    return 0;
+
+  if (strlcpy(sub_url, url, UN) >= UN)
+    return 0;
+
+  const size_t base_url_len = strlcat(sub_url, "/", UN);
+  if (base_url_len >= UN)
+    return 0;
+
+  struct dirent *entry;
+  while ((entry = readdir(dir))) {
+    // only interested in regular files and dirs
+    switch (entry->d_type) {
+    case DT_REG:
+    case DT_DIR:
+      break;
+    default:
+      continue;
+    }
+
+    if (entry->d_namlen < 1)
+      continue;
+
+    // ignore hidden files
+    if (entry->d_name[0] == '.')
+      continue;
+
+    if (base_path_len + entry->d_namlen + 1 > PN) {
+      goto fail;
+    }
+
+    memcpy(sub_path + base_path_len, entry->d_name, entry->d_namlen);
+    sub_path[base_path_len + entry->d_namlen] = '\0';
+
+    if (base_url_len + entry->d_namlen + 1 > UN) {
+      goto fail;
+    }
+
+    memcpy(sub_url + base_url_len, entry->d_name, entry->d_namlen);
+    sub_url[base_url_len + entry->d_namlen] = '\0';
+
+    if (entry->d_type == DT_REG) {
+      if (!html_upload_file(con, sub_url, sub_path)) {
+        goto fail;
+      }
+    } else if (entry->d_type == DT_DIR) {
+      if (!html_upload_dir(con, sub_url, sub_path)) {
+        goto fail;
+      }
+    }
+  }
+
+#undef PN
+#undef UN
+
+  closedir(dir);
+  return 1;
+
+fail:
+  closedir(dir);
+  return 0;
 }
 
 int html_encode_navigate(void *data, size_t size, const char *url) {
