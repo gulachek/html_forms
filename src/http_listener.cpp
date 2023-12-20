@@ -222,6 +222,9 @@ std::string http_listener::add_session(std::weak_ptr<http_session> session) {
 
 void http_listener::remove_session(const std::string &session_id) {
   sessions_.erase(session_id);
+  if (sessions_.empty()) {
+    acceptor_.cancel();
+  }
 }
 
 void http_listener::do_accept() {
