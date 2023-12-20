@@ -15,6 +15,7 @@ int main() {
     return 1;
   }
 
+  printf("Tarball archive is at %s\n", TARBALL_PATH);
   if (!html_upload_dir(con, "/", "./example/tarball/docroot"))
     return 1;
 

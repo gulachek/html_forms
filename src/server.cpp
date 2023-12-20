@@ -20,6 +20,8 @@
 #include "my-asio.hpp"
 #include "my-beast.hpp"
 #include "open-url.hpp"
+
+#include <archive.h>
 #include <filesystem>
 
 extern "C" {
@@ -606,6 +608,9 @@ int main(int argc, char *argv[]) {
   if (!lb) {
     return EXIT_FAILURE;
   }
+
+  struct archive *a;
+  a = archive_read_new();
 
   std::thread th{[&ioc, lb, http, &browsr, &session_dir]() {
     while (true) {

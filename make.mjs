@@ -38,14 +38,41 @@ cli((book, opts) => {
 		link: [htmlLib],
 	});
 
+	const tarballIndexHtml = Path.src('example/tarball/docroot/index.html');
+	const tarballMainCss = Path.src('example/tarball/docroot/style/main.css');
+
+	const tarballArchive = Path.build('example/tarball.tar.gz');
+	book.add(tarballArchive, [tarballIndexHtml, tarballMainCss], async (args) => {
+		const [src, tar] = args.absAll(
+			Path.src('example/tarball/docroot'),
+			tarballArchive,
+		);
+
+		// make all paths relative to docroot
+		return args.spawn('tar', [
+			'-c',
+			'-z',
+			'-f',
+			tar,
+			'-C',
+			src,
+			'--strip-components',
+			'1',
+			'.',
+		]);
+	});
+
 	const tarball = c.addExecutable({
 		name: 'tarball',
 		src: ['example/tarball/main.c'],
+		privateDefinitions: {
+			TARBALL_PATH: `"${book.abs(tarballArchive)}"`,
+		},
 		link: [htmlLib],
 	});
 
 	const example = Path.build('example');
-	book.add(example, [mimeSwap, tarball]);
+	book.add(example, [mimeSwap, tarball, tarballArchive]);
 
 	const platformDef = {};
 	switch (platform()) {
