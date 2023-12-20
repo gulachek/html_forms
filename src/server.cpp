@@ -261,7 +261,10 @@ private:
 
   void end_catui() {
     stream_.close();
-    ws_->close(beast::websocket::close_code::none);
+
+    if (ws_) {
+      ws_->close(beast::websocket::close_code::none);
+    }
   }
 
   void do_ws_read() {

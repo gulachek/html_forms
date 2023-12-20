@@ -9,10 +9,10 @@ export async function readn(
 	}
 
 	const chunk = stream.read(n);
-	if (chunk.length === n) {
-		return chunk as Uint8Array;
-	} else if (chunk.length === 0) {
+	if (!chunk || chunk.length === 0) {
 		return null;
+	} else if (chunk.length === n) {
+		return chunk as Uint8Array;
 	} else {
 		throw new Error(
 			`Expected to read ${n} bytes but only read ${chunk.length}`,

@@ -63,7 +63,14 @@ app.whenReady().then(async () => {
 
 	while (true) {
 		const msg = await recv(process.stdin, BUF_SIZE);
-		if (!msg) break;
+		if (!msg) {
+			// Panic
+			for (const [_, win] of windows.entries()) {
+				win.destroy();
+			}
+			windows.clear();
+			break;
+		}
 
 		const jobj = JSON.parse(decoder.decode(msg)) as OutputMessage;
 
