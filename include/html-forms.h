@@ -89,11 +89,11 @@ void HTML_API html_connection_free(html_connection *con);
 
 int HTML_API html_connect(html_connection con);
 
-int HTML_API html_encode_upload(void *data, size_t size, const char *url,
-                                size_t content_length);
+int HTML_API html_encode_file_upload(void *data, size_t size, const char *url,
+                                     size_t content_length);
 
-int HTML_API html_upload(html_connection con, const char *url,
-                         const char *file_path);
+int HTML_API html_upload_file(html_connection con, const char *url,
+                              const char *file_path);
 
 int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 

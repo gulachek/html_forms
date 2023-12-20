@@ -40,8 +40,8 @@ int html_connect(html_connection con) {
   return 1;
 }
 
-int html_encode_upload(void *data, size_t size, const char *url,
-                       size_t content_length) {
+int html_encode_file_upload(void *data, size_t size, const char *url,
+                            size_t content_length) {
   // url: string
   // size: number
 
@@ -65,7 +65,8 @@ int html_encode_upload(void *data, size_t size, const char *url,
   return strlen(data);
 }
 
-int html_upload(html_connection con, const char *url, const char *file_path) {
+int html_upload_file(html_connection con, const char *url,
+                     const char *file_path) {
   if (!con)
     return 0;
 
@@ -77,7 +78,7 @@ int html_upload(html_connection con, const char *url, const char *file_path) {
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size);
+  int n = html_encode_file_upload(buf, sizeof(buf), url, stats.st_size);
   if (n < 0)
     return n;
 
