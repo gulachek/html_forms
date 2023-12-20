@@ -29,7 +29,13 @@ cli((book, opts) => {
 	const client = c.addExecutable({
 		name: 'client',
 		src: ['test/client.c'],
-		link: ['catui', 'msgstream', htmlLib],
+		link: ['msgstream', htmlLib],
+	});
+
+	const mimeSwap = c.addExecutable({
+		name: 'mime_swap',
+		src: ['test/mime_swap/main.c'],
+		link: [htmlLib],
 	});
 
 	const platformDef = {};
@@ -115,7 +121,7 @@ cli((book, opts) => {
 
 	const cmds = c.addCompileCommands();
 
-	book.add('all', [client, cppServer, cmds, test, browserBundle]);
+	book.add('all', [client, cppServer, cmds, test, browserBundle, mimeSwap]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, cppServer);
