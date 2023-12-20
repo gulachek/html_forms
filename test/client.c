@@ -1,12 +1,7 @@
 #include <html-forms.h>
 
-#include <catui.h>
-#include <msgstream.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/errno.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 int main() {
   html_connection con = html_connection_alloc();
