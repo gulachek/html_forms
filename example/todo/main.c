@@ -174,18 +174,70 @@ int edit_task(int task, sqlite3 *db, html_connection con,
   }
 
   fflush(f);
-  if (!html_upload_file(con, "/view.html", render_path)) {
-    fprintf(stderr, "Failed to upload /view.html\n");
+  if (!html_upload_file(con, "/edit.html", render_path)) {
+    fprintf(stderr, "Failed to upload /edit.html\n");
     goto fail;
   }
 
-  if (!html_navigate(con, "/view.html")) {
-    fprintf(stderr, "Failed to navigate to /view.html\n");
+  if (!html_navigate(con, "/edit.html")) {
+    fprintf(stderr, "Failed to navigate to /edit.html\n");
     goto fail;
   }
 
   html_form_release(pform);
   if (html_read_form(con, pform)) {
+    goto fail;
+  }
+
+  const char *action = html_form_value_of(*pform, "action");
+  if (strcmp(action, "save") != 0) {
+    fprintf(stderr, "Unknown edit action: %s\n", action);
+    goto fail;
+  }
+
+  const char *saveSql = "UPDATE tasks SET title=?"
+                        " ,description=?"
+                        " ,priority=?"
+                        " ,due_date=?"
+                        " WHERE id=?";
+
+  if (sqlite3_prepare_v2(db, saveSql, -1, &stmt, NULL)) {
+    fprintf(stderr, "Failed to prepare UPDATE: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  const char *form_title = html_form_value_of(*pform, "title");
+  if (sqlite3_bind_text(stmt, 1, form_title, -1, SQLITE_STATIC)) {
+    fprintf(stderr, "Failed to bind title: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  const char *form_desc = html_form_value_of(*pform, "description");
+  if (sqlite3_bind_text(stmt, 2, form_desc, -1, SQLITE_STATIC)) {
+    fprintf(stderr, "Failed to bind description: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  int form_priority = atoi(html_form_value_of(*pform, "priority"));
+  if (sqlite3_bind_int(stmt, 3, form_priority)) {
+    fprintf(stderr, "Failed to bind priority: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  const char *form_date = html_form_value_of(*pform, "due-date");
+  if (sqlite3_bind_text(stmt, 4, form_date, -1, SQLITE_STATIC)) {
+    fprintf(stderr, "Failed to bind description: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  if (sqlite3_bind_int(stmt, 5, task)) {
+    fprintf(stderr, "Failed to bind task: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  sqlite3_step(stmt);
+  if (sqlite3_finalize(stmt)) {
+    fprintf(stderr, "Failed to finalize UPDATE: %s\n", sqlite3_errmsg(db));
     goto fail;
   }
 
@@ -258,7 +310,7 @@ int loop(sqlite3 *db, html_connection con, const char *render_path) {
         return 1;
       }
 
-      action = html_form_value_of(form, "action");
+      action = "view";
     } else {
       fprintf(stderr, "Unrecognized action '%s'\n", action);
       return 1;
