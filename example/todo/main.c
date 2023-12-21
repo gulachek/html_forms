@@ -27,6 +27,7 @@ int main() {
   const char *render_path = tmpnam(NULL);
   int ret = loop(db, con, render_path);
 
+  sqlite3_close(db);
   remove(render_path);
   return ret;
 }
@@ -37,19 +38,48 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
   if (!f)
     return 0;
 
-  fprintf(f, "<DOCTYPE html>"
+  fprintf(f, "<!DOCTYPE html>"
              "<html>"
              "<head>"
              "<title> Todo Items </title>"
              "<link rel=\"stylesheet\" href=\"~/main.css\" />"
              "</head>"
              "<body>"
-             "<h1> Todo items! </h1>"
+             "<h1> Todo items </h1>"
+             "<ul class=\"todo-items\">");
+
+  sqlite3_stmt *select;
+  const char *sql = "SELECT id, title, priority, due_date "
+                    "FROM tasks ORDER BY due_date ASC, priority DESC";
+
+  if (sqlite3_prepare_v2(db, sql, -1, &select, NULL)) {
+    fprintf(stderr, "Failed to prepare SELECT: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  while (sqlite3_step(select) == SQLITE_ROW) {
+    int id = sqlite3_column_int(select, 0);
+    const unsigned char *title = sqlite3_column_text(select, 1);
+    int priority = sqlite3_column_int(select, 2);
+    int due_date = sqlite3_column_int(select, 3);
+
+    fprintf(f,
+            "<li>"
+            "<span class=\"title\"> %s </span>"
+            "</li>",
+            title);
+  }
+
+  if (sqlite3_finalize(select)) {
+    fprintf(stderr, "Failed to finalize SELECT: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  fprintf(f, "</ul>"
              "</body>"
              "</html>");
 
   fflush(f);
-
   if (!html_upload_file(con, "/view.html", render_path)) {
     fprintf(stderr, "Failed to upload /view.html\n");
     goto fail;
@@ -74,7 +104,29 @@ fail:
   return 0;
 }
 
+int init_db(sqlite3 *db) {
+  const char *sql = "CREATE TABLE tasks ("
+                    " id INTEGER PRIMARY KEY,"
+                    " title TEXT,"
+                    " description TEXT,"
+                    " priority INTEGER,"
+                    " due_date INTEGER"
+                    ");"
+                    "INSERT INTO tasks (title) VALUES (\"Test\");";
+
+  char *errmsg;
+  if (sqlite3_exec(db, sql, NULL, NULL, &errmsg) != SQLITE_OK) {
+    fprintf(stderr, "Error initializing database: %s\n", errmsg);
+    return 0;
+  }
+
+  return 1;
+}
+
 int loop(sqlite3 *db, html_connection con, const char *render_path) {
+  if (!init_db(db))
+    return 1;
+
   if (!html_upload_dir(con, "/", DOCROOT_PATH))
     return 1;
 
