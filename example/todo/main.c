@@ -60,7 +60,7 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
 
   sqlite3_stmt *select;
   const char *sql = "SELECT id, title, priority, due_date "
-                    "FROM tasks ORDER BY due_date IS NULL, due_date ASC, "
+                    "FROM tasks ORDER BY LENGTH(due_date) DESC, due_date ASC, "
                     "priority DESC";
 
   if (sqlite3_prepare_v2(db, sql, -1, &select, NULL)) {
@@ -69,6 +69,7 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
   }
 
   char esc_title[1024];
+  char esc_date[11]; // really should be yyyy-mm-dd (10, no escape)
 
   while (sqlite3_step(select) == SQLITE_ROW) {
     int id = sqlite3_column_int(select, 0);
@@ -82,15 +83,25 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
       goto fail;
     }
 
+    if (html_escape(esc_date, sizeof(esc_date), (const char *)due_date) >
+        sizeof(esc_date)) {
+      fprintf(stderr, "Date too big: %s\n", due_date);
+      goto fail;
+    }
+
+    const char *date_class =
+        (due_date && strlen((const char *)due_date) > 0) ? "" : " empty";
+
     fprintf(f,
             "<li>"
             "<form>"
             "<input type=\"hidden\" name=\"id\" value=\"%d\" />"
             "<span class=\"title\"> %s </span>"
+            "<span class=\"due-date%s\"> (%s) </span>"
             "<button name=\"action\" value=\"edit\"> Edit </button>"
             "</form>"
             "</li>",
-            id, esc_title);
+            id, esc_title, date_class, esc_date);
   }
 
   if (sqlite3_finalize(select)) {

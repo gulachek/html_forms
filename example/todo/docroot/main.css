@@ -1,3 +1,11 @@
 html {
 	font-family: sans-serif;
 }
+
+.due-date {
+	font-weight: lighter;
+}
+
+.due-date.empty {
+	display: none;
+}
