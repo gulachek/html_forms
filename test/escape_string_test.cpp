@@ -23,6 +23,9 @@ struct f {
   }
 };
 
+BOOST_FIXTURE_TEST_CASE(EmptyString, f) { chk("", ""); }
+BOOST_FIXTURE_TEST_CASE(NullEscapesToEmptyString, f) { chk(NULL, ""); }
+
 BOOST_FIXTURE_TEST_CASE(SimpleStringUnchanged, f) { chk("hello", "hello"); }
 
 BOOST_FIXTURE_TEST_CASE(Ampersand, f) {

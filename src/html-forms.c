@@ -25,6 +25,9 @@
  * > (greater than)	&gt;
  */
 size_t html_escape_size(const char *src) {
+  if (!src)
+    return 1; // null terminator
+
   size_t out = 0;
   for (size_t i = 0; src[i] != '\0'; ++i) {
     switch (src[i]) {
@@ -51,6 +54,11 @@ size_t html_escape(char *dst, size_t dst_size, const char *src) {
   size_t escape_len = html_escape_size(src);
   if (escape_len > dst_size)
     return escape_len;
+
+  if (!src) {
+    dst[0] = '\0';
+    return 1;
+  }
 
   size_t di = 0;
   for (size_t si = 0; src[si] != '\0'; ++si) {

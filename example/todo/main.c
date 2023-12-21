@@ -68,17 +68,25 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
     goto fail;
   }
 
+  char esc_title[1024];
+
   while (sqlite3_step(select) == SQLITE_ROW) {
     int id = sqlite3_column_int(select, 0);
     const unsigned char *title = sqlite3_column_text(select, 1);
     int priority = sqlite3_column_int(select, 2);
     const unsigned char *due_date = sqlite3_column_text(select, 3);
 
+    if (html_escape(esc_title, sizeof(esc_title), (const char *)title) >
+        sizeof(esc_title)) {
+      fprintf(stderr, "Title too big: %s\n", title);
+      goto fail;
+    }
+
     fprintf(f,
             "<li>"
             "<span class=\"title\"> %s </span>"
             "</li>",
-            title);
+            esc_title);
   }
 
   if (sqlite3_finalize(select)) {
@@ -144,6 +152,28 @@ int edit_task(int task, sqlite3 *db, html_connection con,
   if (!f)
     return 0;
 
+  char esc_title[1024];
+  char esc_desc[4096];
+  char esc_date[512];
+
+  if (html_escape(esc_title, sizeof(esc_title), (const char *)title) >
+      sizeof(esc_title)) {
+    fprintf(stderr, "Title too big: %s\n", title);
+    goto fail;
+  }
+
+  if (html_escape(esc_desc, sizeof(esc_desc), (const char *)desc) >
+      sizeof(esc_desc)) {
+    fprintf(stderr, "Description too big: %s\n", desc);
+    goto fail;
+  }
+
+  if (html_escape(esc_date, sizeof(esc_date), (const char *)due_date) >
+      sizeof(esc_date)) {
+    fprintf(stderr, "Due date too big: %s\n", due_date);
+    goto fail;
+  }
+
   print_header(f);
   fprintf(f,
           "<form>"
@@ -164,7 +194,7 @@ int edit_task(int task, sqlite3 *db, html_connection con,
           "value=\"%s\"/></label>"
           "</form>",
 
-          title, title, desc, priority, due_date);
+          esc_title, esc_title, esc_desc, priority, esc_date);
 
   print_footer(f);
 

@@ -92,6 +92,8 @@ struct html_in_msg {
  * null terminator
  * @param[in] src The null terminated string to escape
  * @return The size in bytes of the escaped string
+ * @remark If src is a null pointer, then 1 is returned for a single null
+ * terminator.
  */
 size_t HTML_API html_escape_size(const char *src);
 
@@ -103,7 +105,8 @@ size_t HTML_API html_escape_size(const char *src);
  * terminator
  * @param[in] src The null terminated string to escape
  * @return The size in bytes of the escaped string
- * @remark This is based on php's htmlspecialchars
+ * @remark This is based on php's htmlspecialchars.
+ * @remark If src is a null pointer, dst becomes an empty null terinated string.
  */
 size_t HTML_API html_escape(char *dst, size_t dst_size, const char *src);
 
