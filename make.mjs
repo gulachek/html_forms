@@ -71,8 +71,17 @@ cli((book, opts) => {
 		link: [htmlLib],
 	});
 
+	const todo = c.addExecutable({
+		name: 'todo',
+		src: ['example/todo/main.c'],
+		privateDefinitions: {
+			DOCROOT_PATH: `"${book.abs(Path.src('example/todo/docroot'))}"`,
+		},
+		link: [htmlLib, 'sqlite3'],
+	});
+
 	const example = Path.build('example');
-	book.add(example, [mimeSwap, tarball, tarballArchive]);
+	book.add(example, [mimeSwap, tarball, tarballArchive, todo]);
 
 	const platformDef = {};
 	switch (platform()) {
