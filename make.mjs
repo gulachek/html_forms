@@ -152,7 +152,14 @@ cli((book, opts) => {
 		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
 	});
 
-	const tests = [urlTest, parseFormTest];
+	const escapeStringTest = c.addExecutable({
+		name: 'escape_string_test',
+		src: ['test/escape_string_test.cpp'],
+		privateIncludes: ['private'],
+		link: ['boost-unit_test_framework', htmlLib],
+	});
+
+	const tests = [urlTest, parseFormTest, escapeStringTest];
 	const runTests = tests.map((t) => t.dir().join(t.basename + '.run'));
 
 	for (let i = 0; i < tests.length; ++i) {

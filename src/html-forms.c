@@ -13,6 +13,78 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/*
+ * https://www.php.net/manual/en/function.htmlspecialchars.php
+ *
+ * & (ampersand)	&amp;
+ * " (double quote)	&quot;, unless ENT_NOQUOTES is set
+ * ' (single quote)	&#039; (for ENT_HTML401) or &apos; (for ENT_XML1,
+ * ENT_XHTML or ENT_HTML5), but only when ENT_QUOTES is set
+ * < (less than)
+ * &lt;
+ * > (greater than)	&gt;
+ */
+size_t html_escape_size(const char *src) {
+  size_t out = 0;
+  for (size_t i = 0; src[i] != '\0'; ++i) {
+    switch (src[i]) {
+    case '&':
+      out += 5;
+      break;
+    case '"':
+    case '\'':
+      out += 6;
+      break;
+    case '<':
+    case '>':
+      out += 4;
+      break;
+    default:
+      out += 1;
+    }
+  }
+
+  return out + 1; // +1 for null terminator
+}
+
+size_t html_escape(char *dst, size_t dst_size, const char *src) {
+  size_t escape_len = html_escape_size(src);
+  if (escape_len > dst_size)
+    return escape_len;
+
+  size_t di = 0;
+  for (size_t si = 0; src[si] != '\0'; ++si) {
+    switch (src[si]) {
+    case '&':
+      memcpy(&dst[di], "&amp;", 5);
+      di += 5;
+      break;
+    case '"':
+      memcpy(&dst[di], "&quot;", 6);
+      di += 6;
+      break;
+    case '\'':
+      memcpy(&dst[di], "&#039;", 6);
+      di += 6;
+      break;
+    case '<':
+      memcpy(&dst[di], "&lt;", 4);
+      di += 4;
+      break;
+    case '>':
+      memcpy(&dst[di], "&gt;", 4);
+      di += 4;
+      break;
+    default:
+      dst[di] = src[si];
+      di += 1;
+    }
+  }
+
+  dst[di] = '\0';
+  return escape_len;
+}
+
 struct html_mime_map_ {
   cJSON *array;
 };

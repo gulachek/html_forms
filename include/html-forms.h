@@ -87,6 +87,26 @@ struct html_in_msg {
   } msg;
 };
 
+/**
+ * Determines the size needed to allocate an HTML escaped string, including a
+ * null terminator
+ * @param[in] src The null terminated string to escape
+ * @return The size in bytes of the escaped string
+ */
+size_t HTML_API html_escape_size(const char *src);
+
+/**
+ * Escape a string to be safe to use as text in HTML
+ * @param[out] dst A pointer to a buffer that will hold the escaped null
+ * terminated string
+ * @param[in] dst_size The size of the dst buffer, including space for the null
+ * terminator
+ * @param[in] src The null terminated string to escape
+ * @return The size in bytes of the escaped string
+ * @remark This is based on php's htmlspecialchars
+ */
+size_t HTML_API html_escape(char *dst, size_t dst_size, const char *src);
+
 struct html_connection_;
 typedef struct html_connection_ *html_connection;
 
