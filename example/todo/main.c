@@ -113,6 +113,7 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
             "<span class=\"title\"> %s </span>"
             "<span class=\"due-date%s\"> (%s) </span>"
             "<button name=\"action\" value=\"edit\"> Edit </button>"
+            "<button name=\"action\" value=\"delete\"> Done </button>"
             "</form>"
             "</li>",
             id, bullet_img, esc_title, date_class, esc_date);
@@ -362,6 +363,35 @@ int create_task(sqlite3 *db, int *pid) {
   return 1;
 }
 
+int delete_task(sqlite3 *db, int task) {
+  sqlite3_stmt *stmt;
+  const char *sql = "DELETE FROM tasks WHERE id = ?";
+
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL)) {
+    fprintf(stderr, "Failed to prepare DELETE: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  if (sqlite3_bind_int(stmt, 1, task)) {
+    fprintf(stderr, "Failed to bind task: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+  }
+
+  if (sqlite3_finalize(stmt)) {
+    fprintf(stderr, "Failed to finalize DELETE: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  return 1;
+
+fail:
+  sqlite3_finalize(stmt);
+  return 0;
+}
+
 int loop(sqlite3 *db, html_connection con, const char *render_path) {
   if (!init_db(db))
     return 1;
@@ -394,6 +424,11 @@ int loop(sqlite3 *db, html_connection con, const char *render_path) {
       if (!edit_task(selected_task, db, con, render_path, &form)) {
         return 1;
       }
+
+      action = "view";
+    } else if (strcmp(action, "delete") == 0) {
+      if (!delete_task(db, selected_task))
+        return 1;
 
       action = "view";
     } else {
