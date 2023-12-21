@@ -2,6 +2,22 @@ html {
 	font-family: sans-serif;
 }
 
+.todo-items {
+	list-style-type: none;
+	padding-left: 0;
+}
+
+.todo-line {
+	display: flex;
+	align-items: center;
+	gap: 0.25em;
+}
+
+.todo-bullet {
+	width: 0.95em;
+	height: 0.95em;
+}
+
 .due-date {
 	font-weight: lighter;
 }

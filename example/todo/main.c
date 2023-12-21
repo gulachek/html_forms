@@ -92,16 +92,30 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
     const char *date_class =
         (due_date && strlen((const char *)due_date) > 0) ? "" : " empty";
 
+    const char *bullet_img = "~/icons/normal.svg";
+
+    switch (priority) {
+    case 0:
+      bullet_img = "~/icons/lower.svg";
+      break;
+    case 2:
+      bullet_img = "~/icons/important.svg";
+      break;
+    default:
+      break;
+    }
+
     fprintf(f,
             "<li>"
-            "<form>"
+            "<form class=\"todo-line\">"
             "<input type=\"hidden\" name=\"id\" value=\"%d\" />"
+            "<img class=\"todo-bullet\" src=\"%s\"></img>"
             "<span class=\"title\"> %s </span>"
             "<span class=\"due-date%s\"> (%s) </span>"
             "<button name=\"action\" value=\"edit\"> Edit </button>"
             "</form>"
             "</li>",
-            id, esc_title, date_class, esc_date);
+            id, bullet_img, esc_title, date_class, esc_date);
   }
 
   if (sqlite3_finalize(select)) {
@@ -189,6 +203,23 @@ int edit_task(int task, sqlite3 *db, html_connection con,
     goto fail;
   }
 
+  const char *important_selected = "";
+  const char *normal_selected = "";
+  const char *lower_selected = "";
+  switch (priority) {
+  case 0:
+    lower_selected = "selected";
+    break;
+  case 1:
+    normal_selected = "selected";
+    break;
+  case 2:
+    important_selected = "selected";
+    break;
+  default:
+    break;
+  }
+
   print_header(f);
   fprintf(f,
           "<form>"
@@ -202,14 +233,18 @@ int edit_task(int task, sqlite3 *db, html_connection con,
           "<label> Description: <textarea "
           "name=\"description\">%s</textarea></label>"
           "<br />"
-          "<label> Priority: <input type=\"number\" name=\"priority\" "
-          "value=\"%d\" /></label>"
+          "<label> Priority: <select name=\"priority\">"
+          "<option %s value=\"2\"> Important </option>"
+          "<option %s value=\"1\"> Normal </option>"
+          "<option %s value=\"0\"> Lower </option>"
+          "</select></label>"
           "<br />"
           "<label> Due Date: <input type=\"date\" name=\"due-date\" "
           "value=\"%s\"/></label>"
           "</form>",
 
-          esc_title, esc_title, esc_desc, priority, esc_date);
+          esc_title, esc_title, esc_desc, important_selected, normal_selected,
+          lower_selected, esc_date);
 
   print_footer(f);
 
@@ -301,7 +336,7 @@ int init_db(sqlite3 *db) {
                     " id INTEGER PRIMARY KEY,"
                     " title TEXT,"
                     " description TEXT,"
-                    " priority INTEGER,"
+                    " priority INTEGER DEFAULT 1,"
                     " due_date TEXT"
                     ");"
                     "INSERT INTO tasks (title) VALUES (\"Test\");";
