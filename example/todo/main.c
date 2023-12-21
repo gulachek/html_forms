@@ -52,16 +52,16 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
     return 0;
 
   print_header(f);
-  fprintf(f, "<form>"
-             "<h1> Todo items </h1>"
-             "<div class=\"toolbar\">"
+  fprintf(f, "<h1> Todo items </h1>"
+             "<form class=\"toolbar\">"
              "<button name=\"action\" value=\"add\"> New Task </button>"
-             "</div>"
+             "</form>"
              "<ul class=\"todo-items\">");
 
   sqlite3_stmt *select;
   const char *sql = "SELECT id, title, priority, due_date "
-                    "FROM tasks ORDER BY due_date ASC, priority DESC";
+                    "FROM tasks ORDER BY due_date IS NULL, due_date ASC, "
+                    "priority DESC";
 
   if (sqlite3_prepare_v2(db, sql, -1, &select, NULL)) {
     fprintf(stderr, "Failed to prepare SELECT: %s\n", sqlite3_errmsg(db));
@@ -84,9 +84,13 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
 
     fprintf(f,
             "<li>"
+            "<form>"
+            "<input type=\"hidden\" name=\"id\" value=\"%d\" />"
             "<span class=\"title\"> %s </span>"
+            "<button name=\"action\" value=\"edit\"> Edit </button>"
+            "</form>"
             "</li>",
-            esc_title);
+            id, esc_title);
   }
 
   if (sqlite3_finalize(select)) {
@@ -94,7 +98,7 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
     goto fail;
   }
 
-  fprintf(f, "</ul></form>");
+  fprintf(f, "</ul>");
   print_footer(f);
 
   fflush(f);
@@ -330,6 +334,11 @@ int loop(sqlite3 *db, html_connection con, const char *render_path) {
       }
 
       action = html_form_value_of(form, "action");
+      const char *id = html_form_value_of(form, "id");
+      if (id) {
+        selected_task = atoi(id);
+      }
+
     } else if (strcmp(action, "add") == 0) {
       if (!create_task(db, &selected_task))
         return 1;
