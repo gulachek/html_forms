@@ -32,20 +32,31 @@ int main() {
   return ret;
 }
 
+void print_header(FILE *f) {
+  fprintf(f, "<!DOCTYPE html>"
+             "<html>"
+             "<head>"
+             "<title> Todo Items </title>"
+             "<script src=\"/html/forms.js\"></script>"
+             "<link rel=\"stylesheet\" href=\"~/main.css\" />"
+             "</head>"
+             "<body>");
+}
+
+void print_footer(FILE *f) { fprintf(f, "</body></html>"); }
+
 int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
                html_form *pform) {
   FILE *f = fopen(render_path, "w");
   if (!f)
     return 0;
 
-  fprintf(f, "<!DOCTYPE html>"
-             "<html>"
-             "<head>"
-             "<title> Todo Items </title>"
-             "<link rel=\"stylesheet\" href=\"~/main.css\" />"
-             "</head>"
-             "<body>"
+  print_header(f);
+  fprintf(f, "<form>"
              "<h1> Todo items </h1>"
+             "<div class=\"toolbar\">"
+             "<button name=\"action\" value=\"add\"> New Task </button>"
+             "</div>"
              "<ul class=\"todo-items\">");
 
   sqlite3_stmt *select;
@@ -61,7 +72,7 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
     int id = sqlite3_column_int(select, 0);
     const unsigned char *title = sqlite3_column_text(select, 1);
     int priority = sqlite3_column_int(select, 2);
-    int due_date = sqlite3_column_int(select, 3);
+    const unsigned char *due_date = sqlite3_column_text(select, 3);
 
     fprintf(f,
             "<li>"
@@ -75,9 +86,8 @@ int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
     goto fail;
   }
 
-  fprintf(f, "</ul>"
-             "</body>"
-             "</html>");
+  fprintf(f, "</ul></form>");
+  print_footer(f);
 
   fflush(f);
   if (!html_upload_file(con, "/view.html", render_path)) {
@@ -104,13 +114,98 @@ fail:
   return 0;
 }
 
+int edit_task(int task, sqlite3 *db, html_connection con,
+              const char *render_path, html_form *pform) {
+  sqlite3_stmt *stmt;
+  const char *sql = "SELECT title, description, priority, due_date "
+                    "FROM tasks WHERE id = ?";
+
+  if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL)) {
+    fprintf(stderr, "Failed to prepare SELECT: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  if (sqlite3_bind_int(stmt, 1, task)) {
+    fprintf(stderr, "Failed to bind task: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  if (sqlite3_step(stmt) != SQLITE_ROW) {
+    fprintf(stderr, "Failed to execute SELECT: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  const unsigned char *title = sqlite3_column_text(stmt, 0);
+  const unsigned char *desc = sqlite3_column_text(stmt, 1);
+  int priority = sqlite3_column_int(stmt, 2);
+  const unsigned char *due_date = sqlite3_column_text(stmt, 3);
+
+  FILE *f = fopen(render_path, "w");
+  if (!f)
+    return 0;
+
+  print_header(f);
+  fprintf(f,
+          "<form>"
+          "<h1> %s </h1>"
+          "<div class=\"toolbar\">"
+          "<button name=\"action\" value=\"save\"> Save </button>"
+          "</div>"
+          "<label> Title: <input type=\"text\" name=\"title\" "
+          "value=\"%s\"/></label>"
+          "<br />"
+          "<label> Description: <textarea "
+          "name=\"description\">%s</textarea></label>"
+          "<br />"
+          "<label> Priority: <input type=\"number\" name=\"priority\" "
+          "value=\"%d\" /></label>"
+          "<br />"
+          "<label> Due Date: <input type=\"date\" name=\"due-date\" "
+          "value=\"%s\"/></label>"
+          "</form>",
+
+          title, title, desc, priority, due_date);
+
+  print_footer(f);
+
+  if (sqlite3_finalize(stmt)) {
+    fprintf(stderr, "Failed to finalize SELECT: %s\n", sqlite3_errmsg(db));
+    goto fail;
+  }
+
+  fflush(f);
+  if (!html_upload_file(con, "/view.html", render_path)) {
+    fprintf(stderr, "Failed to upload /view.html\n");
+    goto fail;
+  }
+
+  if (!html_navigate(con, "/view.html")) {
+    fprintf(stderr, "Failed to navigate to /view.html\n");
+    goto fail;
+  }
+
+  html_form_release(pform);
+  if (html_read_form(con, pform)) {
+    goto fail;
+  }
+
+success:
+  fclose(f);
+  return 1;
+
+fail:
+  fclose(f);
+  sqlite3_finalize(stmt);
+  return 0;
+}
+
 int init_db(sqlite3 *db) {
   const char *sql = "CREATE TABLE tasks ("
                     " id INTEGER PRIMARY KEY,"
                     " title TEXT,"
                     " description TEXT,"
                     " priority INTEGER,"
-                    " due_date INTEGER"
+                    " due_date TEXT"
                     ");"
                     "INSERT INTO tasks (title) VALUES (\"Test\");";
 
@@ -123,6 +218,18 @@ int init_db(sqlite3 *db) {
   return 1;
 }
 
+int create_task(sqlite3 *db, int *pid) {
+  char *errmsg;
+  if (sqlite3_exec(db, "INSERT INTO tasks DEFAULT VALUES", NULL, NULL,
+                   &errmsg)) {
+    fprintf(stderr, "Failed to create task: %s\n", errmsg);
+    return 0;
+  }
+
+  *pid = sqlite3_last_insert_rowid(db);
+  return 1;
+}
+
 int loop(sqlite3 *db, html_connection con, const char *render_path) {
   if (!init_db(db))
     return 1;
@@ -132,18 +239,30 @@ int loop(sqlite3 *db, html_connection con, const char *render_path) {
 
   html_form form = NULL;
   const char *action = "view";
+  int selected_task = -1;
 
   while (1) {
     if (strcmp(action, "view") == 0) {
       if (!view_tasks(db, con, render_path, &form)) {
         return 1;
       }
+
+      action = html_form_value_of(form, "action");
+    } else if (strcmp(action, "add") == 0) {
+      if (!create_task(db, &selected_task))
+        return 1;
+
+      action = "edit";
+    } else if (strcmp(action, "edit") == 0) {
+      if (!edit_task(selected_task, db, con, render_path, &form)) {
+        return 1;
+      }
+
+      action = html_form_value_of(form, "action");
     } else {
       fprintf(stderr, "Unrecognized action '%s'\n", action);
       return 1;
     }
-
-    action = html_form_value_of(form, "action");
   }
 
   html_form_release(&form);
