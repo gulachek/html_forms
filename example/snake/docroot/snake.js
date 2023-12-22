@@ -47,6 +47,11 @@ function onMessage(canvas, ctx, msg) {
 		const y = gy * unitY;
 		ctx.fillRect(x, y, unitX, unitY);
 	}
+
+	// draw fruit
+	const [sx, sy] = obj.fruit;
+	ctx.fillStyle = 'rgb(255, 200, 0)';
+	ctx.fillRect(sx * unitX, sy * unitY, unitX, unitY);
 }
 
 async function main() {

@@ -19,6 +19,31 @@ namespace json = boost::json;
 
 typedef std::valarray<int> vec;
 
+std::ostream &operator<<(std::ostream &os, const vec &v) {
+  os << '[';
+  if (v.size() > 0)
+    os << v[0];
+
+  for (std::size_t i = 1; i < v.size(); ++i) {
+    os << ", " << v[i];
+  }
+
+  os << ']';
+  return os;
+}
+
+bool vec_eq(const vec &l, const vec &r) {
+  if (l.size() != r.size())
+    return false;
+
+  for (std::size_t i = 0; i < l.size(); ++i) {
+    if (l[i] != r[i])
+      return false;
+  }
+
+  return true;
+}
+
 class game {
   vec up_, down_, left_, right_;
   html_connection con_;
@@ -31,10 +56,14 @@ class game {
   int width_;
   int height_;
 
+  std::random_device rd_;
+  std::mt19937 rand_gen_;
+
 public:
   game(html_connection con)
       : con_{con}, width_{40}, height_{30}, running_{true}, up_{0, -1},
-        down_{0, 1}, left_{-1, 0}, right_{1, 0}, velocity_{nullptr} {
+        down_{0, 1}, left_{-1, 0}, right_{1, 0}, velocity_{nullptr},
+        rand_gen_{rd_()} {
     in_buf_.resize(1024);
   }
 
@@ -44,6 +73,7 @@ public:
   void stop() noexcept;
   bool slither() noexcept;
   void render() noexcept;
+  void generate_fruit() noexcept;
 };
 
 int main(int argc, char **argv) {
@@ -113,25 +143,13 @@ void game::input_loop() {
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const vec &v) {
-  os << '[';
-  if (v.size() > 0)
-    os << v[0];
-
-  for (std::size_t i = 1; i < v.size(); ++i) {
-    os << ", " << v[i];
-  }
-
-  os << ']';
-  return os;
-}
-
 void game::reset() {
   velocity_ = nullptr;
   vec head{width_ / 2, height_ / 2};
   body_.clear();
   body_.emplace_back(std::move(head));
   body_.emplace_back(body_.front() + down_);
+  generate_fruit();
 }
 
 void game::game_loop() noexcept {
@@ -176,6 +194,8 @@ bool game::slither() noexcept {
 
 void game::render() noexcept {
   json::object output;
+
+  // body
   json::array snake;
   for (const auto &elem : body_) {
     json::array segment = {elem[0], elem[1]};
@@ -183,6 +203,24 @@ void game::render() noexcept {
   }
 
   output["snake"] = std::move(snake);
+
+  // fruit
+  output["fruit"] = json::array{fruit_[0], fruit_[1]};
+
   auto msg = json::serialize(output);
   html_send_js_message(con_, msg.c_str());
+}
+
+void game::generate_fruit() noexcept {
+  for (std::size_t i = 0; i < 100; ++i) {
+    std::uniform_int_distribution<int> rx{0, width_}, ry{0, height_};
+    fruit_ = vec{rx(rand_gen_), ry(rand_gen_)};
+
+    for (const auto &elem : body_) {
+      if (vec_eq(fruit_, elem))
+        continue;
+    }
+
+    return;
+  }
 }
