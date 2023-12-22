@@ -133,6 +133,13 @@ void game::reset() {
 void game::game_loop() noexcept {
   while (running_) {
     if (slither()) {
+      const auto &head = body_.front();
+
+      // out of bounds
+      if (head[0] < 0 || head[0] > width_ || head[1] < 0 || head[1] > height_) {
+        reset();
+      }
+
       json::object output;
       json::array snake;
       for (const auto &elem : body_) {
