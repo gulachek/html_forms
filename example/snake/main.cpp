@@ -179,6 +179,8 @@ void game::game_loop() noexcept {
       // eat fruit!
       if (vec_eq(fruit_, head)) {
         generate_fruit();
+        const auto &tail = body_.back();
+        body_.push_back(tail); // grow
       }
 
       render();
@@ -195,9 +197,16 @@ bool game::slither() noexcept {
     return false;
   }
 
-  auto prev = body_.rbegin();
-  auto next = prev;
+  auto next = body_.rbegin();
+  auto prev = next;
   ++next;
+
+  // happens when growing
+  if (vec_eq(*next, *prev)) {
+    prev = next;
+    ++next;
+  }
+
   while (next != body_.rend()) {
     *prev = *next;
 
