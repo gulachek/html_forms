@@ -43,6 +43,7 @@ public:
   void game_loop() noexcept;
   void stop() noexcept;
   bool slither() noexcept;
+  void render() noexcept;
 };
 
 int main(int argc, char **argv) {
@@ -62,6 +63,9 @@ int main(int argc, char **argv) {
     std::cerr << "Failed to navigate to /index.html" << std::endl;
     return 1;
   }
+
+  std::array<char, 32> sync;
+  html_recv_js_message(con, sync.data(), sync.size());
 
   game snake{con};
 
@@ -131,6 +135,8 @@ void game::reset() {
 }
 
 void game::game_loop() noexcept {
+  render();
+
   while (running_) {
     if (slither()) {
       const auto &head = body_.front();
@@ -140,16 +146,7 @@ void game::game_loop() noexcept {
         reset();
       }
 
-      json::object output;
-      json::array snake;
-      for (const auto &elem : body_) {
-        json::array segment = {elem[0], elem[1]};
-        snake.emplace_back(std::move(segment));
-      }
-
-      output["snake"] = std::move(snake);
-      auto msg = json::serialize(output);
-      html_send_js_message(con_, msg.c_str());
+      render();
     }
 
     std::chrono::milliseconds ms{100};
@@ -175,4 +172,17 @@ bool game::slither() noexcept {
 
   body_.front() += *v;
   return true;
+}
+
+void game::render() noexcept {
+  json::object output;
+  json::array snake;
+  for (const auto &elem : body_) {
+    json::array segment = {elem[0], elem[1]};
+    snake.emplace_back(std::move(segment));
+  }
+
+  output["snake"] = std::move(snake);
+  auto msg = json::serialize(output);
+  html_send_js_message(con_, msg.c_str());
 }

@@ -9,7 +9,11 @@ const keyMap = {
 	ArrowRight: 'right',
 };
 
+let started = false;
+
 function onKeyDown(key) {
+	if (!started) return;
+
 	const dir = keyMap[key];
 	if (!dir) return;
 
@@ -56,6 +60,9 @@ async function main() {
 	window.addEventListener('keydown', (e) => {
 		onKeyDown(e.key);
 	});
+
+	await HtmlForms.sendMessage('<sync>');
+	started = true;
 }
 
 window.addEventListener('load', () => {
