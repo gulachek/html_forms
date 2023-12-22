@@ -26,12 +26,6 @@ cli((book, opts) => {
 		link: ['msgstream', 'cjson', 'catui'],
 	});
 
-	const client = c.addExecutable({
-		name: 'client',
-		src: ['test/client.c'],
-		link: ['msgstream', htmlLib],
-	});
-
 	const mimeSwap = c.addExecutable({
 		name: 'mime_swap',
 		src: ['example/mime_swap/main.c'],
@@ -182,7 +176,7 @@ cli((book, opts) => {
 
 	const cmds = c.addCompileCommands();
 
-	book.add('all', [client, cppServer, cmds, test, browserBundle, example]);
+	book.add('all', [cppServer, cmds, test, browserBundle, example]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, cppServer);

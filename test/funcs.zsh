@@ -2,10 +2,6 @@
 
 export CATUI_ADDRESS="test.sock"
 
-function c() {
-	./build/client
-}
-
 function serve() {
 	if [[ -z "$CATUID" ]]; then
 		read CATUID'?Path to catuid: '
