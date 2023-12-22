@@ -38,11 +38,11 @@ public:
     in_buf_.resize(1024);
   }
 
-  void init();
+  void reset();
   void input_loop();
   void game_loop() noexcept;
   void stop() noexcept;
-  void slither() noexcept;
+  bool slither() noexcept;
 };
 
 int main(int argc, char **argv) {
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 
   game snake{con};
 
-  snake.init();
+  snake.reset();
 
   std::thread game_th{std::bind(&game::game_loop, &snake)};
   try {
@@ -122,41 +122,38 @@ std::ostream &operator<<(std::ostream &os, const vec &v) {
   return os;
 }
 
-void game::init() {
-  velocity_ = &up_;
+void game::reset() {
+  velocity_ = nullptr;
   vec head{width_ / 2, height_ / 2};
+  body_.clear();
   body_.emplace_back(std::move(head));
   body_.emplace_back(body_.front() + down_);
-
-  // receive start message
-  html_recv_js_message(con_, in_buf_.data(), in_buf_.size());
 }
 
 void game::game_loop() noexcept {
   while (running_) {
-    slither();
+    if (slither()) {
+      json::object output;
+      json::array snake;
+      for (const auto &elem : body_) {
+        json::array segment = {elem[0], elem[1]};
+        snake.emplace_back(std::move(segment));
+      }
 
-    json::object output;
-    json::array snake;
-    for (const auto &elem : body_) {
-      json::array segment = {elem[0], elem[1]};
-      snake.emplace_back(std::move(segment));
+      output["snake"] = std::move(snake);
+      auto msg = json::serialize(output);
+      html_send_js_message(con_, msg.c_str());
     }
-
-    output["snake"] = std::move(snake);
-    auto msg = json::serialize(output);
-    html_send_js_message(con_, msg.c_str());
 
     std::chrono::milliseconds ms{100};
     std::this_thread::sleep_for(ms);
   }
 }
 
-void game::slither() noexcept {
+bool game::slither() noexcept {
   auto v = velocity_;
   if (!v) {
-    std::cerr << "Expected velocity to be non-null" << std::endl;
-    return;
+    return false;
   }
 
   auto prev = body_.rbegin();
@@ -170,4 +167,5 @@ void game::slither() noexcept {
   }
 
   body_.front() += *v;
+  return true;
 }

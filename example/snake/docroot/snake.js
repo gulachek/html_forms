@@ -1,19 +1,3 @@
-function promptStart() {
-	const dialog = document.createElement('dialog');
-	dialog.innerHTML = `<p> Press <kbd> Space </kbd> to start </p>`;
-	document.body.appendChild(dialog);
-	dialog.showModal();
-	return new Promise((res) => {
-		dialog.addEventListener('keydown', (e) => {
-			if (e.key === ' ') {
-				dialog.close();
-				document.body.removeChild(dialog);
-				res();
-			}
-		});
-	});
-}
-
 const keyMap = {
 	h: 'left',
 	j: 'down',
@@ -69,13 +53,9 @@ async function main() {
 		onMessage(canvas, ctx, msg);
 	});
 
-	await promptStart();
-
 	window.addEventListener('keydown', (e) => {
 		onKeyDown(e.key);
 	});
-
-	await HtmlForms.sendMessage('<start>');
 }
 
 window.addEventListener('load', () => {
