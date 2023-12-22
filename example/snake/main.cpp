@@ -127,18 +127,29 @@ void game::input_loop() {
 
     std::string_view msg{in_buf_.data(), static_cast<std::size_t>(msg_size)};
 
+    vec *next_vel;
+
     if (msg == "up") {
-      velocity_ = &up_;
+      next_vel = &up_;
     } else if (msg == "down") {
-      velocity_ = &down_;
+      next_vel = &down_;
     } else if (msg == "left") {
-      velocity_ = &left_;
+      next_vel = &left_;
     } else if (msg == "right") {
-      velocity_ = &right_;
+      next_vel = &right_;
     } else {
       std::ostringstream os;
       os << "Invalid input message: " << msg;
       throw std::logic_error{os.str()};
+    }
+
+    if (velocity_) {
+      // avoid 180deg turn
+      if (!vec_eq(*next_vel, -(*velocity_))) {
+        velocity_ = next_vel;
+      }
+    } else {
+      velocity_ = next_vel;
     }
   }
 }
