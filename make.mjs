@@ -86,7 +86,7 @@ cli((book, opts) => {
 		privateDefinitions: {
 			DOCROOT_PATH: `"${book.abs(Path.src('example/snake/docroot'))}"`,
 		},
-		link: [htmlLib],
+		link: [htmlLib, 'boost-json'],
 	});
 
 	const example = Path.build('example');
