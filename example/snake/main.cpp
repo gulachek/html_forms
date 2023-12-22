@@ -171,8 +171,14 @@ void game::game_loop() noexcept {
       const auto &head = body_.front();
 
       // out of bounds
-      if (head[0] < 0 || head[0] > width_ || head[1] < 0 || head[1] > height_) {
+      if (head[0] < 0 || head[0] >= width_ || head[1] < 0 ||
+          head[1] >= height_) {
         reset();
+      }
+
+      // eat fruit!
+      if (vec_eq(fruit_, head)) {
+        generate_fruit();
       }
 
       render();
@@ -224,7 +230,7 @@ void game::render() noexcept {
 
 void game::generate_fruit() noexcept {
   for (std::size_t i = 0; i < 100; ++i) {
-    std::uniform_int_distribution<int> rx{0, width_}, ry{0, height_};
+    std::uniform_int_distribution<int> rx{0, width_ - 1}, ry{0, height_ - 1};
     fruit_ = vec{rx(rand_gen_), ry(rand_gen_)};
 
     for (const auto &elem : body_) {
