@@ -186,7 +186,7 @@ void game::game_loop() noexcept {
       render();
     }
 
-    std::chrono::milliseconds ms{100};
+    std::chrono::milliseconds ms{60};
     std::this_thread::sleep_for(ms);
   }
 }
