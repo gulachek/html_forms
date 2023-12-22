@@ -176,6 +176,16 @@ void game::game_loop() noexcept {
         reset();
       }
 
+      // internal collision
+      auto it = body_.begin();
+      ++it;
+      for (; it != body_.end(); ++it) {
+        if (vec_eq(head, *it)) {
+          reset();
+          break;
+        }
+      }
+
       // eat fruit!
       if (vec_eq(fruit_, head)) {
         generate_fruit();
