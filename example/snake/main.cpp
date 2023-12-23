@@ -46,7 +46,7 @@ bool vec_eq(const vec &l, const vec &r) {
 
 class game {
   vec up_, down_, left_, right_;
-  html_connection con_;
+  html_connection *con_;
   std::vector<char> in_buf_;
 
   bool running_;
@@ -60,7 +60,7 @@ class game {
   std::mt19937 rand_gen_;
 
 public:
-  game(html_connection con)
+  game(html_connection *con)
       : con_{con}, width_{40}, height_{30}, running_{true}, up_{0, -1},
         down_{0, 1}, left_{-1, 0}, right_{1, 0}, velocity_{nullptr},
         rand_gen_{rd_()} {
@@ -77,7 +77,7 @@ public:
 };
 
 int main(int argc, char **argv) {
-  html_connection con = html_connection_alloc();
+  html_connection *con = html_connection_alloc();
 
   if (!html_connect(con)) {
     std::cerr << "Failed to connect to html socket" << std::endl;

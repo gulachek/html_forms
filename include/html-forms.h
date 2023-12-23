@@ -111,12 +111,12 @@ size_t HTML_API html_escape_size(const char *src);
 size_t HTML_API html_escape(char *dst, size_t dst_size, const char *src);
 
 struct html_connection_;
-typedef struct html_connection_ *html_connection;
+typedef struct html_connection_ html_connection;
 
-html_connection HTML_API html_connection_alloc();
-void HTML_API html_connection_free(html_connection *con);
+html_connection *HTML_API html_connection_alloc();
+void HTML_API html_connection_free(html_connection **pcon);
 
-int HTML_API html_connect(html_connection con);
+int HTML_API html_connect(html_connection *con);
 
 int HTML_API html_encode_upload(void *data, size_t size, const char *url,
                                 size_t content_length, int is_archive);
@@ -129,7 +129,7 @@ int HTML_API html_encode_upload(void *data, size_t size, const char *url,
  * for
  * @return 0 on failure, 1 on success
  */
-int HTML_API html_upload_file(html_connection con, const char *url,
+int HTML_API html_upload_file(html_connection *con, const char *url,
                               const char *file_path);
 
 /**
@@ -142,7 +142,7 @@ int HTML_API html_upload_file(html_connection con, const char *url,
  * @remark Hidden files that begin with '.' (like '.gitignore') will not be
  * uploaded
  */
-int HTML_API html_upload_dir(html_connection con, const char *url,
+int HTML_API html_upload_dir(html_connection *con, const char *url,
                              const char *dir_path);
 
 /**
@@ -152,7 +152,7 @@ int HTML_API html_upload_dir(html_connection con, const char *url,
  * @param archive_path The path to the archive on the application system
  * @return 0 on failure, 1 on success
  */
-int HTML_API html_upload_archive(html_connection con, const char *url,
+int HTML_API html_upload_archive(html_connection *con, const char *url,
                                  const char *archive_path);
 
 html_mime_map HTML_API html_mime_map_alloc();
@@ -169,16 +169,16 @@ int HTML_API html_mime_map_entry_at(html_mime_map mimes, size_t i,
 int HTML_API html_encode_upload_mime_map(void *data, size_t size,
                                          html_mime_map mimes);
 
-int HTML_API html_upload_mime_map(html_connection con, html_mime_map mimes);
+int HTML_API html_upload_mime_map(html_connection *con, html_mime_map mimes);
 
 int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 
-int HTML_API html_navigate(html_connection con, const char *url);
+int HTML_API html_navigate(html_connection *con, const char *url);
 
 int HTML_API html_encode_js_message(void *data, size_t size,
                                     size_t content_length);
 
-int HTML_API html_send_js_message(html_connection con, const char *msg);
+int HTML_API html_send_js_message(html_connection *con, const char *msg);
 
 int HTML_API html_decode_out_msg(const void *data, size_t size,
                                  struct html_out_msg *msg);
@@ -201,7 +201,7 @@ typedef struct html_form_ *html_form;
 /**
  * Read a application/x-www-form-urlencoded form
  */
-enum html_error_code HTML_API html_read_form(html_connection con,
+enum html_error_code HTML_API html_read_form(html_connection *con,
                                              html_form *form_ptr);
 
 void HTML_API html_form_release(html_form *form_ptr);
@@ -216,7 +216,8 @@ int HTML_API html_parse_target(const char *target, char *session_id,
                                size_t session_id_len, char *normalized_path,
                                size_t norm_path_len);
 
-int HTML_API html_recv_js_message(html_connection con, void *data, size_t size);
+int HTML_API html_recv_js_message(html_connection *con, void *data,
+                                  size_t size);
 
 #ifdef __cplusplus
 }

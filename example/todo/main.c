@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int loop(sqlite3 *db, html_connection con, const char *render_path);
+int loop(sqlite3 *db, html_connection *con, const char *render_path);
 
 int main() {
   sqlite3 *db;
@@ -13,7 +13,7 @@ int main() {
     return 1;
   }
 
-  html_connection con = html_connection_alloc();
+  html_connection *con = html_connection_alloc();
   if (!con) {
     fprintf(stderr, "Failed to allocate html connection\n");
     return 1;
@@ -45,7 +45,7 @@ void print_header(FILE *f) {
 
 void print_footer(FILE *f) { fprintf(f, "</body></html>"); }
 
-int view_tasks(sqlite3 *db, html_connection con, const char *render_path,
+int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
                html_form *pform) {
   FILE *f = fopen(render_path, "w");
   if (!f)
@@ -152,7 +152,7 @@ fail:
   return 0;
 }
 
-int edit_task(int task, sqlite3 *db, html_connection con,
+int edit_task(int task, sqlite3 *db, html_connection *con,
               const char *render_path, html_form *pform) {
   sqlite3_stmt *stmt;
   const char *sql = "SELECT title, description, priority, due_date "
@@ -392,7 +392,7 @@ fail:
   return 0;
 }
 
-int loop(sqlite3 *db, html_connection con, const char *render_path) {
+int loop(sqlite3 *db, html_connection *con, const char *render_path) {
   if (!init_db(db))
     return 1;
 

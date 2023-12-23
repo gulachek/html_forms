@@ -3,10 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
-int override_mimes(html_connection con);
+int override_mimes(html_connection *con);
 
 int main() {
-  html_connection con = html_connection_alloc();
+  html_connection *con = html_connection_alloc();
   if (!con) {
     fprintf(stderr, "Failed to allocate html connection\n");
     return 1;
@@ -33,7 +33,7 @@ int main() {
   return 0;
 }
 
-int override_mimes(html_connection con) {
+int override_mimes(html_connection *con) {
   html_mime_map mimes = html_mime_map_alloc();
   if (!mimes) {
     fprintf(stderr, "Failed to allocate mime map\n");

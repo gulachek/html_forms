@@ -8,7 +8,7 @@
 struct f {
   int pipe_[2];
   html_form form_ = nullptr;
-  html_connection con_ = nullptr;
+  html_connection *con_ = nullptr;
 
   f() {
     if (::pipe(pipe_) == -1) {

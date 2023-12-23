@@ -97,8 +97,8 @@ struct html_mime_map_ {
   cJSON *array;
 };
 
-html_connection html_connection_alloc() {
-  html_connection con = malloc(sizeof(struct html_connection_));
+html_connection *html_connection_alloc() {
+  html_connection *con = malloc(sizeof(struct html_connection_));
   if (!con)
     return NULL;
 
@@ -106,15 +106,15 @@ html_connection html_connection_alloc() {
   return con;
 }
 
-void html_connection_free(html_connection *con) {
-  if (!(con && *con))
+void html_connection_free(html_connection **pcon) {
+  if (!(pcon && *pcon))
     return;
 
-  free(*con);
-  *con = NULL;
+  free(*pcon);
+  *pcon = NULL;
 }
 
-int html_connect(html_connection con) {
+int html_connect(html_connection *con) {
   if (!con)
     return 0;
 
@@ -157,7 +157,7 @@ int html_encode_upload(void *data, size_t size, const char *url,
   return strlen(data);
 }
 
-static int html_send_upload(html_connection con, const char *url,
+static int html_send_upload(html_connection *con, const char *url,
                             const char *file_path, int is_archive) {
 
   if (!con)
@@ -200,17 +200,17 @@ static int html_send_upload(html_connection con, const char *url,
   return 1;
 }
 
-int html_upload_file(html_connection con, const char *url,
+int html_upload_file(html_connection *con, const char *url,
                      const char *file_path) {
   return html_send_upload(con, url, file_path, /* is_archive: */ 0);
 }
 
-int html_upload_archive(html_connection con, const char *url,
+int html_upload_archive(html_connection *con, const char *url,
                         const char *archive_path) {
   return html_send_upload(con, url, archive_path, /* is_archive: */ 1);
 }
 
-int html_upload_dir(html_connection con, const char *url,
+int html_upload_dir(html_connection *con, const char *url,
                     const char *dir_path) {
   if (!(con && url && dir_path))
     return 0;
@@ -318,7 +318,7 @@ int html_encode_navigate(void *data, size_t size, const char *url) {
   return strlen(data);
 }
 
-int html_navigate(html_connection con, const char *url) {
+int html_navigate(html_connection *con, const char *url) {
   if (!con)
     return 0;
 
@@ -354,7 +354,7 @@ int html_encode_js_message(void *data, size_t size, size_t content_length) {
 }
 
 // TODO - return value to bool
-int html_send_js_message(html_connection con, const char *msg) {
+int html_send_js_message(html_connection *con, const char *msg) {
   if (!con)
     return -1;
 
@@ -816,7 +816,7 @@ static int html_read_form_data(int fd, void *data, size_t size,
 }
 
 // TODO - return val to bool
-int HTML_API html_recv_js_message(html_connection con, void *data,
+int HTML_API html_recv_js_message(html_connection *con, void *data,
                                   size_t size) {
   if (!con)
     return -1;
@@ -962,7 +962,7 @@ static int parse_field(char *buf, size_t size, int offset,
   return field_size;
 }
 
-enum html_error_code html_read_form(html_connection con, html_form *pform) {
+enum html_error_code html_read_form(html_connection *con, html_form *pform) {
   if (!(con && pform))
     return HTML_ERROR;
 
@@ -1139,7 +1139,7 @@ int html_encode_upload_mime_map(void *data, size_t size, html_mime_map mimes) {
   return strlen(data);
 }
 
-int html_upload_mime_map(html_connection con, html_mime_map mimes) {
+int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
   if (!(con && mimes))
     return 0;
 

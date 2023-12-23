@@ -4,7 +4,7 @@
 #include <string.h>
 
 int main() {
-  html_connection con = html_connection_alloc();
+  html_connection *con = html_connection_alloc();
   if (!con) {
     fprintf(stderr, "Failed to allocate html connection\n");
     return 1;
