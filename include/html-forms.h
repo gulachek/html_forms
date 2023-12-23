@@ -113,7 +113,17 @@ size_t HTML_API html_escape(char *dst, size_t dst_size, const char *src);
 struct html_connection_;
 typedef struct html_connection_ html_connection;
 
+/**
+ * Connect to catui server with 'com.gulachek.html-forms' protocol
+ * @param[out] pcon Pointer to connection object pointer
+ * @return 0 on failure, 1 on success
+ */
 int HTML_API html_connect(html_connection **pcon);
+
+/**
+ * Disconnect and free resources associated with a connection
+ * @param[in] con The connection to be disconnected
+ */
 void HTML_API html_disconnect(html_connection *con);
 
 int HTML_API html_encode_upload(void *data, size_t size, const char *url,
