@@ -20,21 +20,27 @@ function onKeyDown(key) {
 	HtmlForms.sendMessage(dir);
 }
 
-function onMessage(canvas, ctx, msg) {
+let lastMsg;
+const GAME_WIDTH = 40;
+const GAME_HEIGHT = 30;
+
+function resizeCanvas(canvas) {
+	const { clientWidth, clientHeight } = document.documentElement;
+	const pxPerUnitX = Math.max(Math.floor(clientWidth / GAME_WIDTH), 3);
+	const pxPerUnitY = Math.max(Math.floor(clientHeight / GAME_HEIGHT), 3);
+	const pxPerUnit = Math.min(pxPerUnitX, pxPerUnitY);
+
+	canvas.width = pxPerUnit * GAME_WIDTH;
+	canvas.height = pxPerUnit * GAME_HEIGHT;
+}
+
+function render(canvas, ctx) {
+	if (!lastMsg) return;
+
 	const { width, height } = canvas;
-	const gameWidth = 40;
-	const gameHeight = 30;
 
-	const unitX = width / gameWidth;
-	const unitY = height / gameHeight;
-
-	let obj;
-	try {
-		obj = JSON.parse(msg);
-	} catch (e) {
-		console.error(e);
-		alert('Error parsing JSON message. See console for details.');
-	}
+	const unitX = width / GAME_WIDTH;
+	const unitY = height / GAME_HEIGHT;
 
 	// clear
 	ctx.fillStyle = 'rgb(255, 255, 255)';
@@ -42,14 +48,14 @@ function onMessage(canvas, ctx, msg) {
 
 	// draw snake
 	ctx.fillStyle = 'rgb(0, 255, 0)';
-	for (const [gx, gy] of obj.snake) {
+	for (const [gx, gy] of lastMsg.snake) {
 		const x = gx * unitX;
 		const y = gy * unitY;
 		ctx.fillRect(x, y, unitX, unitY);
 	}
 
 	// draw fruit
-	const [sx, sy] = obj.fruit;
+	const [sx, sy] = lastMsg.fruit;
 	ctx.fillStyle = 'rgb(255, 200, 0)';
 	ctx.fillRect(sx * unitX, sy * unitY, unitX, unitY);
 }
@@ -57,13 +63,26 @@ function onMessage(canvas, ctx, msg) {
 async function main() {
 	const canvas = document.getElementById('canvas');
 	const ctx = canvas.getContext('2d');
+	resizeCanvas(canvas);
 
 	HtmlForms.on('message', (msg) => {
-		onMessage(canvas, ctx, msg);
+		try {
+			lastMsg = JSON.parse(msg);
+		} catch (e) {
+			console.error(e);
+			alert('Error parsing JSON message. See console for details.');
+		}
+
+		render(canvas, ctx);
 	});
 
 	window.addEventListener('keydown', (e) => {
 		onKeyDown(e.key);
+	});
+
+	window.addEventListener('resize', () => {
+		resizeCanvas(canvas);
+		render(canvas, ctx);
 	});
 
 	await HtmlForms.sendMessage('<sync>');
