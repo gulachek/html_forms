@@ -4,14 +4,11 @@
 #include <string.h>
 
 int main() {
-  html_connection *con = html_connection_alloc();
-  if (!con) {
-    fprintf(stderr, "Failed to allocate html connection\n");
-    return 1;
-  }
+  html_connection *con;
 
-  if (!html_connect(con)) {
+  if (!html_connect(&con)) {
     // TODO - print error in connection
+    fprintf(stderr, "Failed to make html connection\n");
     return 1;
   }
 

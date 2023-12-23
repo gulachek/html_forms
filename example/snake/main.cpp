@@ -77,9 +77,9 @@ public:
 };
 
 int main(int argc, char **argv) {
-  html_connection *con = html_connection_alloc();
+  html_connection *con;
 
-  if (!html_connect(con)) {
+  if (!html_connect(&con)) {
     std::cerr << "Failed to connect to html socket" << std::endl;
     return 1;
   }

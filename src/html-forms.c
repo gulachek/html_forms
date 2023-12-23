@@ -97,15 +97,6 @@ struct html_mime_map_ {
   cJSON *array;
 };
 
-html_connection *html_connection_alloc() {
-  html_connection *con = malloc(sizeof(struct html_connection_));
-  if (!con)
-    return NULL;
-
-  con->fd = -1;
-  return con;
-}
-
 void html_connection_free(html_connection **pcon) {
   if (!(pcon && *pcon))
     return;
@@ -114,7 +105,11 @@ void html_connection_free(html_connection **pcon) {
   *pcon = NULL;
 }
 
-int html_connect(html_connection *con) {
+int html_connect(html_connection **pcon) {
+  if (!pcon)
+    return 0;
+
+  html_connection *con = *pcon = malloc(sizeof(struct html_connection_));
   if (!con)
     return 0;
 

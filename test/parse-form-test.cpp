@@ -15,7 +15,9 @@ struct f {
       BOOST_FAIL("Failed to create pipes");
     }
 
-    con_ = html_connection_alloc();
+    // TODO - should have a simple parsing function instead of
+    // full blown connection
+    con_ = (html_connection *)malloc(sizeof(html_connection));
     con_->fd = pipe_[0]; // for reading forms
   }
 
