@@ -25,7 +25,7 @@ struct f {
     ::close(pipe_[0]);
     ::close(pipe_[1]);
     html_form_release(&form_);
-    html_connection_free(&con_);
+    html_disconnect(con_);
   }
 
   void send(const std::string_view &sv) {

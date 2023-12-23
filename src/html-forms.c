@@ -97,14 +97,6 @@ struct html_mime_map_ {
   cJSON *array;
 };
 
-void html_connection_free(html_connection **pcon) {
-  if (!(pcon && *pcon))
-    return;
-
-  free(*pcon);
-  *pcon = NULL;
-}
-
 int html_connect(html_connection **pcon) {
   if (!pcon)
     return 0;
@@ -120,6 +112,13 @@ int html_connect(html_connection **pcon) {
   }
 
   return 1;
+}
+
+void html_disconnect(html_connection *con) {
+  if (!con)
+    return;
+
+  free(con);
 }
 
 int html_encode_upload(void *data, size_t size, const char *url,

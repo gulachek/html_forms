@@ -113,9 +113,8 @@ size_t HTML_API html_escape(char *dst, size_t dst_size, const char *src);
 struct html_connection_;
 typedef struct html_connection_ html_connection;
 
-void HTML_API html_connection_free(html_connection **pcon);
-
-int HTML_API html_connect(html_connection **con);
+int HTML_API html_connect(html_connection **pcon);
+void HTML_API html_disconnect(html_connection *con);
 
 int HTML_API html_encode_upload(void *data, size_t size, const char *url,
                                 size_t content_length, int is_archive);

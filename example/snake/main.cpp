@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
 
   game_th.join();
 
-  html_connection_free(&con);
+  html_disconnect(con);
   return 0;
 }
 
