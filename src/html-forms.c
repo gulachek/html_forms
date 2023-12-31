@@ -140,7 +140,7 @@ void html_disconnect(html_connection *con) {
   free(con);
 }
 
-const char *HTML_API html_errmsg(html_connection *con) {
+const char *html_errmsg(html_connection *con) {
   if (!con)
     return NULL;
 
@@ -579,9 +579,8 @@ fail:
   return 0;
 }
 
-int HTML_API html_encode_submit_form(void *data, size_t size,
-                                     size_t content_length,
-                                     const char *mime_type) {
+int html_encode_submit_form(void *data, size_t size, size_t content_length,
+                            const char *mime_type) {
   // mime: string
   // size: number
 
@@ -908,8 +907,7 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
 }
 
 // TODO - return val to bool
-int HTML_API html_recv_js_message(html_connection *con, void *data,
-                                  size_t size) {
+int html_recv_js_message(html_connection *con, void *data, size_t size) {
   if (!con)
     return -1;
 
@@ -1140,20 +1138,19 @@ size_t html_form_size(const html_form *form) {
   return form->size;
 }
 
-const char *HTML_API html_form_field_name(const html_form *form, size_t i) {
+const char *html_form_name_at(const html_form *form, size_t i) {
   if (!(form && i < form->size))
     return NULL;
   return form->fields[i].name;
 }
 
-const char *HTML_API html_form_field_value(const html_form *form, size_t i) {
+const char *html_form_value_at(const html_form *form, size_t i) {
   if (!(form && i < form->size))
     return NULL;
   return form->fields[i].value;
 }
 
-const char *HTML_API html_form_value_of(const html_form *form,
-                                        const char *field_name) {
+const char *html_form_value_of(const html_form *form, const char *field_name) {
   if (!form)
     return NULL;
 
@@ -1180,7 +1177,7 @@ html_mime_map *html_mime_map_create() {
   return ptr;
 }
 
-void HTML_API html_mime_map_free(html_mime_map *mimes) {
+void html_mime_map_free(html_mime_map *mimes) {
   if (!mimes)
     return;
 

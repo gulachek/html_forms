@@ -51,9 +51,9 @@ struct f {
     // Check consistency of object
     std::size_t n = html_form_size(form_);
     for (int i = 0; i < n; ++i) {
-      const char *name_c = html_form_field_name(form_, i);
+      const char *name_c = html_form_name_at(form_, i);
       std::string_view name{name_c};
-      std::string_view value{html_form_field_value(form_, i)};
+      std::string_view value{html_form_value_at(form_, i)};
 
       BOOST_TEST(value == html_form_value_of(form_, name_c));
     }
@@ -83,9 +83,9 @@ struct f {
     BOOST_TEST(std::string_view{measured_value} == expected_value);
   }
 
-  std::string_view name(int i) { return html_form_field_name(form_, i); }
+  std::string_view name(int i) { return html_form_name_at(form_, i); }
 
-  std::string_view value(int i) { return html_form_field_value(form_, i); }
+  std::string_view value(int i) { return html_form_value_at(form_, i); }
 };
 
 BOOST_FIXTURE_TEST_CASE(SingleParameter, f) {
