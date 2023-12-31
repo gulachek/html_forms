@@ -1,6 +1,17 @@
 #ifndef HTML_FORMS_H
 #define HTML_FORMS_H
 
+#include <stdio.h>
+#include <stdlib.h>
+
+#ifndef HTML_API
+#define HTML_API
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define HTML_MSG_SIZE 2048
 #define HTML_URL_SIZE 512
 #define HTML_MIME_SIZE 256
@@ -14,17 +25,6 @@ enum html_error_code {
   /* user or program requested close while operation in progress */
   HTML_CLOSE_REQ = 2,
 };
-
-#ifndef HTML_API
-#define HTML_API
-#endif
-
-#include <stdio.h>
-#include <stdlib.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 enum html_out_msg_type {
   HTML_BEGIN_UPLOAD = 0,
