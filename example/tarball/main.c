@@ -24,7 +24,7 @@ int main() {
 
   html_form *form;
   if (html_read_form(con, &form) == HTML_OK)
-    html_form_release(form);
+    html_form_free(form);
 
   return 0;
 }

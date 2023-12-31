@@ -1118,7 +1118,7 @@ enum html_error_code html_read_form(html_connection *con, html_form **pform) {
   return HTML_OK;
 }
 
-void html_form_release(html_form *form) {
+void html_form_free(html_form *form) {
   if (!form)
     return;
 

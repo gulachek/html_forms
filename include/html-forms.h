@@ -270,7 +270,7 @@ typedef struct html_form_ html_form;
 enum html_error_code HTML_API html_read_form(html_connection *con,
                                              html_form **pform);
 
-void HTML_API html_form_release(html_form *form);
+void HTML_API html_form_free(html_form *form);
 
 size_t HTML_API html_form_size(const html_form *form);
 const char *HTML_API html_form_name_at(const html_form *form, size_t i);
