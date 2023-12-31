@@ -504,7 +504,7 @@ static int html_decode_js_msg(cJSON *obj, struct js_message *msg) {
   return 1;
 }
 
-static int html_decode_mime_msg(cJSON *obj, html_mime_map mimes) {
+static int html_decode_mime_msg(cJSON *obj, html_mime_map *mimes) {
   if (!mimes)
     return 0;
 
@@ -565,7 +565,7 @@ int html_decode_out_msg(const void *data, size_t size,
     ret = html_decode_js_msg(obj, &msg->msg.js_msg);
   } else if (type_val == HTML_MIME_MAP) {
     msg->type = HTML_MIME_MAP;
-    msg->msg.mime = html_mime_map_alloc();
+    msg->msg.mime = html_mime_map_create();
     ret = html_decode_mime_msg(obj, msg->msg.mime);
   } else {
     goto fail;
@@ -1170,8 +1170,8 @@ const char *HTML_API html_form_value_of(const html_form form,
   return NULL;
 }
 
-html_mime_map HTML_API html_mime_map_alloc() {
-  html_mime_map ptr = malloc(sizeof(struct html_mime_map_));
+html_mime_map *html_mime_map_create() {
+  html_mime_map *ptr = malloc(sizeof(html_mime_map));
   if (!ptr)
     return NULL;
 
@@ -1185,17 +1185,15 @@ html_mime_map HTML_API html_mime_map_alloc() {
   return ptr;
 }
 
-void HTML_API html_mime_map_free(html_mime_map *pmimes) {
-  if (!(pmimes && *pmimes))
+void HTML_API html_mime_map_free(html_mime_map *mimes) {
+  if (!mimes)
     return;
 
-  html_mime_map mimes = *pmimes;
   cJSON_Delete(mimes->array);
   free(mimes);
-  *pmimes = NULL;
 }
 
-int html_mime_map_add(html_mime_map mimes, const char *extname,
+int html_mime_map_add(html_mime_map *mimes, const char *extname,
                       const char *mime_type) {
   if (!(mimes && extname && mime_type))
     return 0;
@@ -1241,7 +1239,8 @@ fail:
   return 0;
 }
 
-int html_encode_upload_mime_map(void *data, size_t size, html_mime_map mimes) {
+int html_encode_mime_map_apply(void *data, size_t size,
+                               const html_mime_map *mimes) {
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
     return -1;
@@ -1260,7 +1259,7 @@ int html_encode_upload_mime_map(void *data, size_t size, html_mime_map mimes) {
   return strlen(data);
 }
 
-int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
+int html_mime_map_apply(html_connection *con, const html_mime_map *mimes) {
   if (!con)
     return 0;
 
@@ -1270,7 +1269,7 @@ int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_upload_mime_map(buf, sizeof(buf), mimes);
+  int n = html_encode_mime_map_apply(buf, sizeof(buf), mimes);
   if (n < 0) {
     printf_err(con, "Failed to encode mime map message (usually "
                     "memory constraint)");
@@ -1286,14 +1285,14 @@ int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
   return 1;
 }
 
-size_t html_mime_map_size(html_mime_map mimes) {
+size_t html_mime_map_size(const html_mime_map *mimes) {
   if (!mimes)
     return 0;
   return cJSON_GetArraySize(mimes->array);
 }
 
-int html_mime_map_entry_at(html_mime_map mimes, size_t i, const char **extname,
-                           const char **mime_type) {
+int html_mime_map_entry_at(const html_mime_map *mimes, size_t i,
+                           const char **extname, const char **mime_type) {
   if (!mimes)
     return 0;
 

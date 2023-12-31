@@ -203,7 +203,7 @@ private:
     }
   }
 
-  void do_map_mimes(html_mime_map mimes) {
+  void do_map_mimes(html_mime_map *mimes) {
     std::size_t n = html_mime_map_size(mimes);
     for (std::size_t i = 0; i < n; ++i) {
       const char *ext_c, *mime_c;
@@ -217,6 +217,7 @@ private:
       mime_overrides_[ext_c] = mime_c;
     }
 
+    html_mime_map_free(mimes);
     do_recv();
   }
 

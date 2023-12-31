@@ -35,9 +35,9 @@ int main() {
 }
 
 int override_mimes(html_connection *con) {
-  html_mime_map mimes = html_mime_map_alloc();
+  html_mime_map *mimes = html_mime_map_create();
   if (!mimes) {
-    fprintf(stderr, "Failed to allocate mime map\n");
+    fprintf(stderr, "Failed to create mime map\n");
     return 0;
   }
 
@@ -52,11 +52,11 @@ int override_mimes(html_connection *con) {
     return 0;
   }
 
-  if (!html_upload_mime_map(con, mimes)) {
-    fprintf(stderr, "Failed to upload mime map: %s\n", html_errmsg(con));
+  if (!html_mime_map_apply(con, mimes)) {
+    fprintf(stderr, "Failed to apply mime map: %s\n", html_errmsg(con));
     return 0;
   }
 
-  html_mime_map_free(&mimes);
+  html_mime_map_free(mimes);
   return 1;
 }

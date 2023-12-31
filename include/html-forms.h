@@ -52,7 +52,7 @@ struct js_message {
 };
 
 struct html_mime_map_;
-typedef struct html_mime_map_ *html_mime_map;
+typedef struct html_mime_map_ html_mime_map;
 
 struct html_out_msg {
   enum html_out_msg_type type;
@@ -60,7 +60,7 @@ struct html_out_msg {
     struct begin_upload upload;
     struct navigate navigate;
     struct js_message js_msg;
-    html_mime_map mime;
+    html_mime_map *mime;
   } msg;
 };
 
@@ -172,21 +172,70 @@ int HTML_API html_upload_dir(html_connection *con, const char *url,
 int HTML_API html_upload_archive(html_connection *con, const char *url,
                                  const char *archive_path);
 
-html_mime_map HTML_API html_mime_map_alloc();
+/**
+ * Create a mime map object
+ * @return A pointer to a newly created mime map, or a NULL pointer on failure
+ * @remark The caller must call html_mime_map_free() when done with the mime map
+to avoid memory leaks.
+ */
+html_mime_map *HTML_API html_mime_map_create();
+
+/**
+ * Free a mime map object
+ * @param[in] mimes Pointer to mime map object
+ */
 void HTML_API html_mime_map_free(html_mime_map *mimes);
 
-int HTML_API html_mime_map_add(html_mime_map mimes, const char *extname,
+/**
+ * Add a mapping from a URL file extension to a MIME type
+ * @param[in] mimes The mime map object to be updated
+ * @param[in] extname The file extension to map
+ * @param[in] mime_type The corresponding mime type
+ * @return 1 if successful, 0 on failure
+ * @remark File extensions may include or omit the '.' character. For example
+ * associating either ".html5" or "html5" with "text/html" will both equally
+ * cause a request to
+ * "/index.html5" to be served with a "text/html" Content-Type.
+ */
+int HTML_API html_mime_map_add(html_mime_map *mimes, const char *extname,
                                const char *mime_type);
 
-size_t HTML_API html_mime_map_size(html_mime_map mimes);
-int HTML_API html_mime_map_entry_at(html_mime_map mimes, size_t i,
+/**
+ * Get the number of mime map entries
+ * @param[in] mimes The mime map object
+ * @return The number of entries associated with the mime map
+ */
+size_t HTML_API html_mime_map_size(const html_mime_map *mimes);
+
+/**
+ * Get the contents of a mime map entry
+ * @param[in] mimes The mime map object
+ * @param[in] i The index of the entry to query (starts at 0)
+ * @param[out] extname The associated file extension
+ * @param[out] mime_type The associated mime type
+ * @return 1 if successful, 0 on failure
+ */
+int HTML_API html_mime_map_entry_at(const html_mime_map *mimes, size_t i,
                                     const char **extname,
                                     const char **mime_type);
 
-int HTML_API html_encode_upload_mime_map(void *data, size_t size,
-                                         html_mime_map mimes);
+/**
+ * Encode a message to send a mime map to the server
+ * @param[in] data The buffer to hold the encoded message
+ * @param[in] size The size of the buffer
+ * @param[in] mimes The mime map object to encode
+ */
+int HTML_API html_encode_mime_map_apply(void *data, size_t size,
+                                        const html_mime_map *mimes);
 
-int HTML_API html_upload_mime_map(html_connection *con, html_mime_map mimes);
+/**
+ * Send a mime map to be applied to the session
+ * @param[in] con The connection to the server
+ * @param[in] mimes The mime map object to apply
+ * @return 1 on success, 0 on failure
+ */
+int HTML_API html_mime_map_apply(html_connection *con,
+                                 const html_mime_map *mimes);
 
 int HTML_API html_encode_navigate(void *data, size_t size, const char *url);
 
