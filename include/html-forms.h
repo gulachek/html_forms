@@ -266,15 +266,53 @@ typedef struct html_form_ html_form;
 
 /**
  * Read a application/x-www-form-urlencoded form
+ * @param[in] con The connection to read from
+ * @param[out] pform Pointer to form pointer
+ * @return HTML_OK when a form is read, other status otherwise
+ * @remark The caller is responsible to free the form with html_form_free()
  */
 enum html_error_code HTML_API html_read_form(html_connection *con,
                                              html_form **pform);
 
+/**
+ * Free a form object
+ * @param[in] form The form to free
+ */
 void HTML_API html_form_free(html_form *form);
 
+/**
+ * Get the number of fields in a form
+ * @param[in] form The form to query
+ * @return The number of fields in the form
+ */
 size_t HTML_API html_form_size(const html_form *form);
+
+/**
+ * Get the name of a field
+ * @param[in] form The form whose field is being queried
+ * @param[in] i The index of the field being queried (starting at 0)
+ * @return A pointer to a null-terminated string of the name of the field
+ * @remark The returned pointer is valid until the form is freed
+ */
 const char *HTML_API html_form_name_at(const html_form *form, size_t i);
+
+/**
+ * Get the value of a field
+ * @param[in] form The form whose field is being queried
+ * @param[in] i The index of the field being queried (starting at 0)
+ * @return A pointer to a null-terminated string of the value of the field
+ * @remark The returned pointer is valid until the form is freed
+ */
 const char *HTML_API html_form_value_at(const html_form *form, size_t i);
+
+/**
+ * Get the value of a field with a specific name
+ * @param[in] form The form to query
+ * @param[in] field_name The name of the field to search for
+ * @return A pointer to a null-terminated string of the value of the first field
+ * whose name compares equal to field_name
+ * @remark The returned pointer is valid until the form is freed
+ */
 const char *HTML_API html_form_value_of(const html_form *form,
                                         const char *field_name);
 
