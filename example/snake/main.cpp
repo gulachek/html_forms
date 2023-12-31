@@ -80,17 +80,19 @@ int main(int argc, char **argv) {
   html_connection *con;
 
   if (!html_connect(&con)) {
-    std::cerr << "Failed to connect to html socket" << std::endl;
+    std::cerr << "Failed to connect to html socket: " << html_errmsg(con)
+              << std::endl;
     return 1;
   }
 
   if (!html_upload_dir(con, "/", DOCROOT_PATH)) {
-    std::cerr << "Failed to upload docroot" << std::endl;
+    std::cerr << "Failed to upload docroot: " << html_errmsg(con) << std::endl;
     return 1;
   }
 
   if (!html_navigate(con, "/index.html")) {
-    std::cerr << "Failed to navigate to /index.html" << std::endl;
+    std::cerr << "Failed to navigate to /index.html: " << html_errmsg(con)
+              << std::endl;
     return 1;
   }
 
@@ -122,7 +124,9 @@ void game::input_loop() {
     int msg_size = html_recv_js_message(con_, in_buf_.data(), in_buf_.size());
 
     if (msg_size < 0) {
-      throw std::runtime_error{"Error reading input message"};
+      std::ostringstream os;
+      os << "Error reading input message: " << html_errmsg(con_);
+      throw std::runtime_error{os.str()};
     }
 
     std::string_view msg{in_buf_.data(), static_cast<std::size_t>(msg_size)};
@@ -244,7 +248,9 @@ void game::render() noexcept {
   output["fruit"] = json::array{fruit_[0], fruit_[1]};
 
   auto msg = json::serialize(output);
-  html_send_js_message(con_, msg.c_str());
+  if (html_send_js_message(con_, msg.c_str()) < 0) {
+    std::cerr << "Failed to send message: " << html_errmsg(con_) << std::endl;
+  }
 }
 
 void game::generate_fruit() noexcept {
