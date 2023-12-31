@@ -846,34 +846,56 @@ int html_parse_target(const char *target, char *session_id,
   return 1;
 }
 
-static int html_read_form_data(int fd, void *data, size_t size,
+static int html_read_form_data(html_connection *con, void *data, size_t size,
                                size_t *pnread) {
   uint8_t buf[HTML_MSG_SIZE];
   size_t n;
-  if (msgstream_fd_recv(fd, buf, sizeof(buf), &n))
+  int ec = msgstream_fd_recv(con->fd, buf, sizeof(buf), &n);
+  if (ec) {
+    printf_err(con, "Failed to receive input message: %s",
+               msgstream_errstr(ec));
     return HTML_ERROR;
+  }
 
   struct html_in_msg msg;
-  if (!html_decode_in_msg(buf, n, &msg))
+  if (!html_decode_in_msg(buf, n, &msg)) {
+    printf_err(con, "Failed to parse input message");
     return HTML_ERROR;
+  }
 
   if (msg.type != HTML_SUBMIT_FORM) {
-    return msg.type == HTML_IMSG_CLOSE_REQ ? HTML_CLOSE_REQ : HTML_ERROR;
+    if (msg.type == HTML_IMSG_CLOSE_REQ) {
+      printf_err(con, "Close requested by user");
+      return HTML_CLOSE_REQ;
+    } else {
+      printf_err(con, "Unexpected message type: %d", msg.type);
+      return HTML_ERROR;
+    }
   }
 
+  const char *x_www_form_urlencoded = "application/x-www-form-urlencoded";
   struct html_begin_submit_form *form = &msg.msg.form;
-  if (strcmp(form->mime_type, "application/x-www-form-urlencoded") != 0) {
+  if (strcmp(form->mime_type, x_www_form_urlencoded) != 0) {
+    printf_err(con, "Unexpected form mime type '%s' (expected '%s')",
+               form->mime_type, x_www_form_urlencoded);
     return HTML_ERROR;
   }
 
-  if (form->content_length + 1 > size)
+  if (form->content_length + 1 > size) {
+    printf_err(con,
+               "Form buffer of size %lu is too small for received form of size "
+               "%lu (plus null terminator)",
+               size, form->content_length);
     return HTML_ERROR;
+  }
 
   int nread = 0;
   while (nread < form->content_length) {
-    ssize_t ret = read(fd, data + nread, form->content_length - nread);
-    if (ret < 1)
+    ssize_t ret = read(con->fd, data + nread, form->content_length - nread);
+    if (ret < 1) {
+      printf_err(con, "read() failed: %s", strerror(errno));
       return HTML_ERROR;
+    }
 
     nread += ret;
   }
@@ -914,7 +936,8 @@ int HTML_API html_recv_js_message(html_connection *con, void *data,
   struct html_begin_recv_js_msg *js_msg = &msg.msg.js_msg;
   if (js_msg->content_length + 1 > size) {
     printf_err(con,
-               "Buffer of size %lu is too small for message of size %lu (and a "
+               "Buffer of size %lu is too small for message of "
+               "size %lu (and a "
                "null terminator)",
                size, js_msg->content_length);
     return -1;
@@ -1053,9 +1076,8 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
 
   char buf[HTML_FORM_SIZE];
   size_t n;
-  int ec = html_read_form_data(con->fd, buf, sizeof(buf), &n);
+  int ec = html_read_form_data(con, buf, sizeof(buf), &n);
   if (ec != HTML_OK) {
-    // TODO - expand on this
     printf_err(con, "Failed to read form data");
     return ec;
   }
@@ -1084,7 +1106,8 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
     int field_size = parse_field(buf, n, i, &form->fields[field_i]);
     if (field_size < 0) {
       printf_err(con,
-                 "Failed to parse form field %d in '%s' (starting at '%5s')",
+                 "Failed to parse form field %d in '%s' (starting "
+                 "at '%5s')",
                  field_i, buf, &buf[i]);
       return HTML_ERROR;
     }
@@ -1248,8 +1271,8 @@ int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
   char buf[HTML_MSG_SIZE];
   int n = html_encode_upload_mime_map(buf, sizeof(buf), mimes);
   if (n < 0) {
-    printf_err(con,
-               "Failed to encode mime map message (usually memory constraint)");
+    printf_err(con, "Failed to encode mime map message (usually "
+                    "memory constraint)");
     return 0;
   }
 
