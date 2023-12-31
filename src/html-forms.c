@@ -701,6 +701,7 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
     ret = html_decode_recv_js_msg(obj, &msg->msg.js_msg);
   } else if (type_val == HTML_IMSG_CLOSE_REQ) {
     msg->type = HTML_IMSG_CLOSE_REQ;
+    ret = 1;
   } else {
     goto fail;
   }
@@ -1078,7 +1079,7 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
   size_t n;
   int ec = html_read_form_data(con, buf, sizeof(buf), &n);
   if (ec != HTML_OK) {
-    printf_err(con, "Failed to read form data");
+    // error message handled in html_read_form_data
     return ec;
   }
 
