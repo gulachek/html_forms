@@ -126,17 +126,18 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
 
   fflush(f);
   if (!html_upload_file(con, "/view.html", render_path)) {
-    fprintf(stderr, "Failed to upload /view.html\n");
+    fprintf(stderr, "Failed to upload /view.html: %s\n", html_errmsg(con));
     goto fail;
   }
 
   if (!html_navigate(con, "/view.html")) {
-    fprintf(stderr, "Failed to navigate to /view.html\n");
+    fprintf(stderr, "Failed to navigate to /view.html: %s\n", html_errmsg(con));
     goto fail;
   }
 
   html_form_release(pform);
   if (html_read_form(con, pform)) {
+    fprintf(stderr, "Failed to read form: %s\n", html_errmsg(con));
     goto fail;
   }
 
@@ -253,17 +254,18 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
 
   fflush(f);
   if (!html_upload_file(con, "/edit.html", render_path)) {
-    fprintf(stderr, "Failed to upload /edit.html\n");
+    fprintf(stderr, "Failed to upload /edit.html: %s\n", html_errmsg(con));
     goto fail;
   }
 
   if (!html_navigate(con, "/edit.html")) {
-    fprintf(stderr, "Failed to navigate to /edit.html\n");
+    fprintf(stderr, "Failed to navigate to /edit.html: %s\n", html_errmsg(con));
     goto fail;
   }
 
   html_form_release(pform);
   if (html_read_form(con, pform)) {
+    fprintf(stderr, "Failed to read form: %s\n", html_errmsg(con));
     goto fail;
   }
 
@@ -393,8 +395,10 @@ int loop(sqlite3 *db, html_connection *con, const char *render_path) {
   if (!init_db(db))
     return 1;
 
-  if (!html_upload_dir(con, "/", DOCROOT_PATH))
+  if (!html_upload_dir(con, "/", DOCROOT_PATH)) {
+    fprintf(stderr, "Failed to upload docroot: %s\n", html_errmsg(con));
     return 1;
+  }
 
   html_form form = NULL;
   const char *action = "view";
