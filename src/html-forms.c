@@ -1070,7 +1070,7 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
     return HTML_ERROR;
 
   if (!pform) {
-    printf_err(con, "Null form argument");
+    printf_err(con, "null form argument");
     return HTML_ERROR;
   }
 
@@ -1263,8 +1263,8 @@ int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
   if (!con)
     return 0;
 
-  if (mimes) {
-    printf_err(con, "Null 'mimes' arg");
+  if (!mimes) {
+    printf_err(con, "null 'mimes' arg");
     return 0;
   }
 
