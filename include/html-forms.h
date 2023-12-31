@@ -246,6 +246,9 @@ int HTML_API html_encode_js_message(void *data, size_t size,
 
 int HTML_API html_send_js_message(html_connection *con, const char *msg);
 
+int HTML_API html_recv_js_message(html_connection *con, void *data,
+                                  size_t size);
+
 int HTML_API html_decode_out_msg(const void *data, size_t size,
                                  struct html_out_msg *msg);
 
@@ -319,9 +322,6 @@ const char *HTML_API html_form_value_of(const html_form *form,
 int HTML_API html_parse_target(const char *target, char *session_id,
                                size_t session_id_len, char *normalized_path,
                                size_t norm_path_len);
-
-int HTML_API html_recv_js_message(html_connection *con, void *data,
-                                  size_t size);
 
 #ifdef __cplusplus
 }
