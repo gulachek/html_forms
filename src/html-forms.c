@@ -1066,12 +1066,12 @@ static int parse_field(char *buf, size_t size, int offset,
   return field_size;
 }
 
-enum html_error_code html_read_form(html_connection *con, html_form *pform) {
+enum html_error_code html_read_form(html_connection *con, html_form **pform) {
   if (!con)
     return HTML_ERROR;
 
   if (!pform) {
-    printf_err(con, "null form argument");
+    printf_err(con, "null 'pform' argument");
     return HTML_ERROR;
   }
 
@@ -1089,8 +1089,8 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
       ++nfields;
   }
 
-  html_form form;
-  if ((form = malloc(sizeof(struct html_form_))) == NULL) {
+  html_form *form;
+  if ((form = malloc(sizeof(html_form))) == NULL) {
     printf_err(con, "Failed to allocate html_form struct");
     return HTML_ERROR;
   }
@@ -1120,11 +1120,7 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
   return HTML_OK;
 }
 
-void html_form_release(html_form *pform) {
-  if (!pform)
-    return;
-
-  html_form form = *pform;
+void html_form_release(html_form *form) {
   if (!form)
     return;
 
@@ -1136,28 +1132,27 @@ void html_form_release(html_form *pform) {
 
   free(form->fields);
   free(form);
-  *pform = NULL;
 }
 
-size_t html_form_size(const html_form form) {
+size_t html_form_size(const html_form *form) {
   if (!form)
     return 0;
   return form->size;
 }
 
-const char *HTML_API html_form_field_name(const html_form form, size_t i) {
+const char *HTML_API html_form_field_name(const html_form *form, size_t i) {
   if (!(form && i < form->size))
     return NULL;
   return form->fields[i].name;
 }
 
-const char *HTML_API html_form_field_value(const html_form form, size_t i) {
+const char *HTML_API html_form_field_value(const html_form *form, size_t i) {
   if (!(form && i < form->size))
     return NULL;
   return form->fields[i].value;
 }
 
-const char *HTML_API html_form_value_of(const html_form form,
+const char *HTML_API html_form_value_of(const html_form *form,
                                         const char *field_name) {
   if (!form)
     return NULL;

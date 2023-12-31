@@ -7,7 +7,7 @@
 
 struct f {
   int pipe_[2];
-  html_form form_ = nullptr;
+  html_form *form_ = nullptr;
   html_connection *con_ = nullptr;
 
   f() {
@@ -24,7 +24,7 @@ struct f {
   ~f() {
     ::close(pipe_[0]);
     ::close(pipe_[1]);
-    html_form_release(&form_);
+    html_form_release(form_);
     html_disconnect(con_);
   }
 

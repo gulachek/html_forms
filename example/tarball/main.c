@@ -22,8 +22,9 @@ int main() {
     return 1;
   }
 
-  html_form form = NULL;
-  html_read_form(con, &form);
-  html_form_release(&form);
+  html_form *form;
+  if (html_read_form(con, &form) == HTML_OK)
+    html_form_release(form);
+
   return 0;
 }

@@ -262,20 +262,20 @@ int HTML_API html_encode_recv_js_msg(void *data, size_t size,
 int HTML_API html_encode_close_request(void *data, size_t size);
 
 struct html_form_;
-typedef struct html_form_ *html_form;
+typedef struct html_form_ html_form;
 
 /**
  * Read a application/x-www-form-urlencoded form
  */
 enum html_error_code HTML_API html_read_form(html_connection *con,
-                                             html_form *form_ptr);
+                                             html_form **pform);
 
-void HTML_API html_form_release(html_form *form_ptr);
+void HTML_API html_form_release(html_form *form);
 
-size_t HTML_API html_form_size(const html_form form);
-const char *HTML_API html_form_field_name(const html_form form, size_t i);
-const char *HTML_API html_form_field_value(const html_form form, size_t i);
-const char *HTML_API html_form_value_of(const html_form form,
+size_t HTML_API html_form_size(const html_form *form);
+const char *HTML_API html_form_field_name(const html_form *form, size_t i);
+const char *HTML_API html_form_field_value(const html_form *form, size_t i);
+const char *HTML_API html_form_value_of(const html_form *form,
                                         const char *field_name);
 
 int HTML_API html_parse_target(const char *target, char *session_id,
