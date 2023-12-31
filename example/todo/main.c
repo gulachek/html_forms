@@ -17,7 +17,7 @@ int main() {
 
   if (!html_connect(&con)) {
     // TODO - print error in connection
-    fprintf(stderr, "Failed to make html connection\n");
+    fprintf(stderr, "Failed to make html connection: %s\n", html_errmsg(con));
     return 1;
   }
 

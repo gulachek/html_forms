@@ -6,10 +6,12 @@
 #include <cjson/cJSON.h>
 #include <ctype.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include <dirent.h>
 #include <sys/dirent.h>
+#include <sys/errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -99,19 +101,36 @@ struct html_mime_map_ {
 
 int html_connect(html_connection **pcon) {
   if (!pcon)
-    return 0;
+    goto fail;
 
   html_connection *con = *pcon = malloc(sizeof(struct html_connection_));
   if (!con)
-    return 0;
+    goto fail;
 
-  con->fd = catui_connect("com.gulachek.html-forms", "0.1.0", stderr);
-  if (con->fd == -1) {
-    // TODO - add error to connection
-    return 0;
+  FILE *f = tmpfile();
+  if (!f) {
+    printf_err(con, "Failed to create tmpfile for catui");
+    goto fail;
   }
 
+  con->fd = catui_connect("com.gulachek.html-forms", "0.1.0", f);
+  if (con->fd == -1) {
+
+    fflush(f);
+    rewind(f);
+    char buf[sizeof(con->errbuf)];
+    size_t nread = fread(buf, 1, sizeof(buf), f);
+    printf_err(con, "Failed to create catui connection: %*s", nread, buf);
+    goto fail;
+  }
+
+  fclose(f);
   return 1;
+
+fail:
+  if (f)
+    fclose(f);
+  return 0;
 }
 
 void html_disconnect(html_connection *con) {
@@ -119,6 +138,13 @@ void html_disconnect(html_connection *con) {
     return;
 
   free(con);
+}
+
+const char *HTML_API html_errmsg(html_connection *con) {
+  if (!con)
+    return NULL;
+
+  return con->errbuf;
 }
 
 int html_encode_upload(void *data, size_t size, const char *url,
@@ -161,32 +187,44 @@ static int html_send_upload(html_connection *con, const char *url,
 
   struct stat stats;
   if (stat(file_path, &stats) == -1) {
+    printf_err(con, "stat('%s'): %s", file_path, strerror(errno));
     return 0;
   }
 
   char buf[HTML_MSG_SIZE];
   int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, is_archive);
-  if (n < 0)
-    return n;
-
-  if (msgstream_fd_send(fd, buf, sizeof(buf), n))
+  if (n < 0) {
+    printf_err(con, "Failed to serialize message (likely memory issue)");
     return 0;
+  }
+
+  int ec = msgstream_fd_send(fd, buf, sizeof(buf), n);
+  if (ec) {
+    printf_err(con, "Failed to send message: %s", msgstream_errstr(ec));
+    return 0;
+  }
 
   FILE *f = fopen(file_path, "r");
-  if (!f)
+  if (!f) {
+    printf_err(con, "fopen('%s'): %s", file_path, strerror(errno));
     return 0;
+  }
 
   size_t nleft = stats.st_size;
   while (nleft) {
     size_t n_to_read = HTML_MSG_SIZE < nleft ? HTML_MSG_SIZE : nleft;
     size_t nread = fread(buf, 1, n_to_read, f);
-    if (nread == 0)
+    if (nread == 0) {
+      printf_err(con, "Read fewer bytes than expected on '%s': %s", file_path,
+                 strerror(errno));
       return 0;
+    }
 
     nleft -= nread;
 
     if (write(fd, buf, nread) == -1) {
-      perror("write");
+      printf_err(con, "Failed to write file contents to connection: %s",
+                 strerror(errno));
       return 0;
     }
   }
@@ -206,12 +244,24 @@ int html_upload_archive(html_connection *con, const char *url,
 
 int html_upload_dir(html_connection *con, const char *url,
                     const char *dir_path) {
-  if (!(con && url && dir_path))
+  if (!con)
     return 0;
 
-  DIR *dir = opendir(dir_path);
-  if (!dir)
+  if (!url) {
+    printf_err(con, "null url arg");
     return 0;
+  }
+
+  if (!dir_path) {
+    printf_err(con, "null dir_path arg");
+    return 0;
+  }
+
+  DIR *dir = opendir(dir_path);
+  if (!dir) {
+    printf_err(con, "opendir('%s'): %s", dir_path, strerror(errno));
+    return 0;
+  }
 
   char sub_path[PATH_MAX];
   char sub_url[HTML_URL_SIZE];
@@ -219,23 +269,31 @@ int html_upload_dir(html_connection *con, const char *url,
 #define UN sizeof(sub_url)
 
   size_t base_path_len = strlcpy(sub_path, dir_path, PN);
-  if (base_path_len >= PN)
+  if (base_path_len >= PN) {
+    printf_err(con, "Failed to copy dir path %s", dir_path);
     return 0;
+  }
 
   if (sub_path[base_path_len - 1] != '/') {
     base_path_len = strlcat(sub_path, "/", PN);
-    if (base_path_len >= PN)
+    if (base_path_len >= PN) {
+      printf_err(con, "Failed to append '/' to %s", sub_path);
       return 0;
+    }
   }
 
   size_t base_url_len = strlcpy(sub_url, url, UN);
-  if (base_url_len >= UN)
+  if (base_url_len >= UN) {
+    printf_err(con, "Failed to copy url %s", url);
     return 0;
+  }
 
   if (sub_url[base_url_len - 1] != '/') {
     base_url_len = strlcat(sub_url, "/", UN);
-    if (base_url_len >= UN)
+    if (base_url_len >= UN) {
+      printf_err(con, "Failed to append '/' to %s", sub_url);
       return 0;
+    }
   }
 
   struct dirent *entry;
@@ -257,6 +315,8 @@ int html_upload_dir(html_connection *con, const char *url,
       continue;
 
     if (base_path_len + entry->d_namlen + 1 > PN) {
+      printf_err(con, "No space to concatenate '%*s' to path '%s'",
+                 entry->d_namlen, entry->d_name, sub_path);
       goto fail;
     }
 
@@ -264,6 +324,8 @@ int html_upload_dir(html_connection *con, const char *url,
     sub_path[base_path_len + entry->d_namlen] = '\0';
 
     if (base_url_len + entry->d_namlen + 1 > UN) {
+      printf_err(con, "No space to concatenate '%*s' to url '%s'",
+                 entry->d_namlen, entry->d_name, sub_url);
       goto fail;
     }
 
@@ -318,11 +380,17 @@ int html_navigate(html_connection *con, const char *url) {
 
   char buf[HTML_MSG_SIZE];
   int n = html_encode_navigate(buf, sizeof(buf), url);
-  if (n < 0)
+  if (n < 0) {
+    printf_err(con,
+               "Failed to serialize navigate message (likely memory issue)");
     return 0;
-
-  if (msgstream_fd_send(con->fd, buf, sizeof(buf), n))
+  }
+  int ec = msgstream_fd_send(con->fd, buf, sizeof(buf), n);
+  if (ec) {
+    printf_err(con, "Failed to send navigate message: %s",
+               msgstream_errstr(ec));
     return 0;
+  }
 
   return 1;
 }
@@ -357,14 +425,21 @@ int html_send_js_message(html_connection *con, const char *msg) {
   char buf[HTML_MSG_SIZE];
   size_t msg_size = strlen(msg);
   int n = html_encode_js_message(buf, sizeof(buf), msg_size);
-  if (n < 0)
+  if (n < 0) {
+    printf_err(con, "Failed to serialize message (likely memory issue)");
     return n;
+  }
 
-  if (msgstream_fd_send(fd, buf, sizeof(buf), n))
+  int ec = msgstream_fd_send(fd, buf, sizeof(buf), n);
+  if (ec) {
+    printf_err(con, "Failed to send message: %s", msgstream_errstr(ec));
     return -1;
+  }
 
-  if (write(fd, msg, msg_size) == -1)
+  if (write(fd, msg, msg_size) == -1) {
+    printf_err(con, "Failed to write contents of message: %s", strerror(errno));
     return -1;
+  }
 
   return msg_size;
 }
@@ -819,18 +894,29 @@ int HTML_API html_recv_js_message(html_connection *con, void *data,
   uint8_t buf[HTML_MSG_SIZE];
   size_t n;
 
-  if (msgstream_fd_recv(fd, buf, sizeof(buf), &n))
+  int ec = msgstream_fd_recv(fd, buf, sizeof(buf), &n);
+  if (ec) {
+    printf_err(con, "Failed to receive js message: %s", msgstream_errstr(ec));
     return -1;
+  }
 
   struct html_in_msg msg;
-  if (!html_decode_in_msg(buf, n, &msg))
+  if (!html_decode_in_msg(buf, n, &msg)) {
+    printf_err(con, "Failed to parse input message");
     return -1;
+  }
 
-  if (msg.type != HTML_RECV_JS_MSG)
+  if (msg.type != HTML_RECV_JS_MSG) {
+    printf_err(con, "Unexpected message type '%d'", msg.type);
     return -1;
+  }
 
   struct html_begin_recv_js_msg *js_msg = &msg.msg.js_msg;
   if (js_msg->content_length + 1 > size) {
+    printf_err(con,
+               "Buffer of size %lu is too small for message of size %lu (and a "
+               "null terminator)",
+               size, js_msg->content_length);
     return -1;
   }
 
@@ -957,14 +1043,22 @@ static int parse_field(char *buf, size_t size, int offset,
 }
 
 enum html_error_code html_read_form(html_connection *con, html_form *pform) {
-  if (!(con && pform))
+  if (!con)
     return HTML_ERROR;
+
+  if (!pform) {
+    printf_err(con, "Null form argument");
+    return HTML_ERROR;
+  }
 
   char buf[HTML_FORM_SIZE];
   size_t n;
   int ec = html_read_form_data(con->fd, buf, sizeof(buf), &n);
-  if (ec != HTML_OK)
+  if (ec != HTML_OK) {
+    // TODO - expand on this
+    printf_err(con, "Failed to read form data");
     return ec;
+  }
 
   int nfields = n > 0 ? 1 : 0;
   for (int i = 0; i < n; ++i) {
@@ -973,18 +1067,27 @@ enum html_error_code html_read_form(html_connection *con, html_form *pform) {
   }
 
   html_form form;
-  if ((form = malloc(sizeof(struct html_form_))) == NULL)
+  if ((form = malloc(sizeof(struct html_form_))) == NULL) {
+    printf_err(con, "Failed to allocate html_form struct");
     return HTML_ERROR;
+  }
 
   form->size = nfields;
-  if ((form->fields = calloc(nfields, sizeof(struct html_form_field))) == NULL)
+  if ((form->fields = calloc(nfields, sizeof(struct html_form_field))) ==
+      NULL) {
+    printf_err(con, "Failed to allocate form for %d fields", nfields);
     return HTML_ERROR;
+  }
 
   int i = 0;
   for (int field_i = 0; field_i < nfields; ++field_i) {
     int field_size = parse_field(buf, n, i, &form->fields[field_i]);
-    if (field_size < 0)
-      return -1;
+    if (field_size < 0) {
+      printf_err(con,
+                 "Failed to parse form field %d in '%s' (starting at '%5s')",
+                 field_i, buf, &buf[i]);
+      return HTML_ERROR;
+    }
 
     i += field_size + 1; // magic 1 for '&'
   }
@@ -1134,16 +1237,27 @@ int html_encode_upload_mime_map(void *data, size_t size, html_mime_map mimes) {
 }
 
 int html_upload_mime_map(html_connection *con, html_mime_map mimes) {
-  if (!(con && mimes))
+  if (!con)
     return 0;
+
+  if (mimes) {
+    printf_err(con, "Null 'mimes' arg");
+    return 0;
+  }
 
   char buf[HTML_MSG_SIZE];
   int n = html_encode_upload_mime_map(buf, sizeof(buf), mimes);
-  if (n < 0)
+  if (n < 0) {
+    printf_err(con,
+               "Failed to encode mime map message (usually memory constraint)");
     return 0;
+  }
 
-  if (msgstream_fd_send(con->fd, buf, sizeof(buf), n))
+  int ec = msgstream_fd_send(con->fd, buf, sizeof(buf), n);
+  if (ec) {
+    printf_err(con, "Failed to send mime message: %s", msgstream_errstr(ec));
     return 0;
+  }
 
   return 1;
 }
@@ -1171,4 +1285,12 @@ int html_mime_map_entry_at(html_mime_map mimes, size_t i, const char **extname,
   *mime_type = cJSON_GetStringValue(mime_str);
 
   return 1;
+}
+
+int printf_err(html_connection *con, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  int ret = vsnprintf(con->errbuf, sizeof(con->errbuf), fmt, args);
+  va_end(args);
+  return ret;
 }

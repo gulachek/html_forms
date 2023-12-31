@@ -126,6 +126,15 @@ int HTML_API html_connect(html_connection **pcon);
  */
 void HTML_API html_disconnect(html_connection *con);
 
+/**
+ * Retreive the last error message associated with the connection
+ * @param[in] The connection
+ * @return A pointer to a null terminated string error message
+ * @remark The pointer will be valid until another function operates on the
+ * connection
+ */
+const char *HTML_API html_errmsg(html_connection *con);
+
 int HTML_API html_encode_upload(void *data, size_t size, const char *url,
                                 size_t content_length, int is_archive);
 

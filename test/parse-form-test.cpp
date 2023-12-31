@@ -64,7 +64,7 @@ struct f {
   void fail(const std::string_view &sv) {
     send(sv);
     int ret = html_read_form(con_, &form_);
-    BOOST_TEST(ret < 0);
+    BOOST_TEST(ret == HTML_ERROR);
   }
 
   void chksz(std::size_t expected_size) {
