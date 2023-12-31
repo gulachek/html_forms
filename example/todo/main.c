@@ -116,7 +116,10 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
             id, bullet_img, esc_title, date_class, esc_date);
   }
 
-  if (sqlite3_finalize(select)) {
+  int ec = sqlite3_finalize(select);
+  select = NULL;
+
+  if (ec) {
     fprintf(stderr, "Failed to finalize SELECT: %s\n", sqlite3_errmsg(db));
     goto fail;
   }
@@ -147,6 +150,7 @@ success:
 
 fail:
   fclose(f);
+  sqlite3_finalize(select);
   return 0;
 }
 
@@ -247,7 +251,10 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
 
   print_footer(f);
 
-  if (sqlite3_finalize(stmt)) {
+  int ec = sqlite3_finalize(stmt);
+  stmt = NULL;
+
+  if (ec) {
     fprintf(stderr, "Failed to finalize SELECT: %s\n", sqlite3_errmsg(db));
     goto fail;
   }
@@ -316,7 +323,10 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
   }
 
   sqlite3_step(stmt);
-  if (sqlite3_finalize(stmt)) {
+  ec = sqlite3_finalize(stmt);
+  stmt = NULL;
+
+  if (ec) {
     fprintf(stderr, "Failed to finalize UPDATE: %s\n", sqlite3_errmsg(db));
     goto fail;
   }
@@ -379,7 +389,10 @@ int delete_task(sqlite3 *db, int task) {
   while (sqlite3_step(stmt) == SQLITE_ROW) {
   }
 
-  if (sqlite3_finalize(stmt)) {
+  int ec = sqlite3_finalize(stmt);
+  stmt = NULL;
+
+  if (ec) {
     fprintf(stderr, "Failed to finalize DELETE: %s\n", sqlite3_errmsg(db));
     goto fail;
   }
