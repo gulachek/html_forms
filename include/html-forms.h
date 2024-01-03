@@ -1,5 +1,9 @@
 #ifndef HTML_FORMS_H
 #define HTML_FORMS_H
+/**
+ * @file
+ * @brief HTML Forms C/C++ Public API
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
