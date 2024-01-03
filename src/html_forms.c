@@ -148,8 +148,9 @@ const char *html_errmsg(html_connection *con) {
   return con->errbuf;
 }
 
-int html_encode_upload(void *data, size_t size, const char *url,
-                       size_t content_length, enum html_resource_type type) {
+int html_encode_omsg_upload(void *data, size_t size, const char *url,
+                            size_t content_length,
+                            enum html_resource_type type) {
   // url: string
   // size: number
   // resType: number
@@ -194,7 +195,7 @@ static int html_send_upload(html_connection *con, const char *url,
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, type);
+  int n = html_encode_omsg_upload(buf, sizeof(buf), url, stats.st_size, type);
   if (n < 0) {
     printf_err(con, "Failed to serialize message (likely memory issue)");
     return 0;
@@ -356,7 +357,7 @@ fail:
   return 0;
 }
 
-int html_encode_navigate(void *data, size_t size, const char *url) {
+int html_encode_omsg_navigate(void *data, size_t size, const char *url) {
   // url: string
 
   cJSON *obj = cJSON_CreateObject();
@@ -381,7 +382,7 @@ int html_navigate(html_connection *con, const char *url) {
     return 0;
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_navigate(buf, sizeof(buf), url);
+  int n = html_encode_omsg_navigate(buf, sizeof(buf), url);
   if (n < 0) {
     printf_err(con,
                "Failed to serialize navigate message (likely memory issue)");
@@ -397,7 +398,7 @@ int html_navigate(html_connection *con, const char *url) {
   return 1;
 }
 
-int html_encode_js_message(void *data, size_t size, size_t content_length) {
+int html_encode_omsg_app_msg(void *data, size_t size, size_t content_length) {
   // size: number
 
   cJSON *obj = cJSON_CreateObject();
@@ -426,7 +427,7 @@ int html_send_js_message(html_connection *con, const char *msg) {
 
   char buf[HTML_MSG_SIZE];
   size_t msg_size = strlen(msg);
-  int n = html_encode_js_message(buf, sizeof(buf), msg_size);
+  int n = html_encode_omsg_app_msg(buf, sizeof(buf), msg_size);
   if (n < 0) {
     printf_err(con, "Failed to serialize message (likely memory issue)");
     return n;
@@ -486,7 +487,7 @@ static int uintval(cJSON *obj, const char *key, unsigned int *val) {
   return 1;
 }
 
-static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
+static int html_decode_upload_msg(cJSON *obj, struct html_omsg_upload *msg) {
   // url: string
   // size: number
   // archive: bool
@@ -510,14 +511,15 @@ static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   return 1;
 }
 
-static int html_decode_navigate_msg(cJSON *obj, struct navigate *msg) {
+static int html_decode_navigate_msg(cJSON *obj,
+                                    struct html_omsg_navigate *msg) {
   if (!copy_string(obj, "url", msg->url, sizeof(msg->url)))
     return 0;
 
   return 1;
 }
 
-static int html_decode_js_msg(cJSON *obj, struct js_message *msg) {
+static int html_decode_js_msg(cJSON *obj, struct html_omsg_app_msg *msg) {
   cJSON *size = cJSON_GetObjectItem(obj, "size");
   if (!(size && cJSON_IsNumber(size)))
     return 0;
@@ -589,7 +591,7 @@ int html_decode_out_msg(const void *data, size_t size,
     ret = html_decode_navigate_msg(obj, &msg->msg.navigate);
   } else if (type_val == HTML_OMSG_APP_MSG) {
     msg->type = HTML_OMSG_APP_MSG;
-    ret = html_decode_js_msg(obj, &msg->msg.js_msg);
+    ret = html_decode_js_msg(obj, &msg->msg.app_msg);
   } else if (type_val == HTML_OMSG_MIME_MAP) {
     msg->type = HTML_OMSG_MIME_MAP;
     msg->msg.mime = html_mime_map_create();
@@ -606,8 +608,8 @@ fail:
   return 0;
 }
 
-int html_encode_submit_form(void *data, size_t size, size_t content_length,
-                            const char *mime_type) {
+int html_encode_imsg_form(void *data, size_t size, size_t content_length,
+                          const char *mime_type) {
   // mime: string
   // size: number
 
@@ -631,8 +633,7 @@ int html_encode_submit_form(void *data, size_t size, size_t content_length,
   return strlen(data);
 }
 
-static int html_decode_submit_form_msg(cJSON *obj,
-                                       struct html_begin_submit_form *msg) {
+static int html_decode_submit_form_msg(cJSON *obj, struct html_imsg_form *msg) {
   // mime: string
   // size: number
   if (!copy_string(obj, "mime", msg->mime_type, sizeof(msg->mime_type)))
@@ -651,7 +652,7 @@ static int html_decode_submit_form_msg(cJSON *obj,
   return 1;
 }
 
-int html_encode_recv_js_msg(void *data, size_t size, size_t content_length) {
+int html_encode_imsg_app_msg(void *data, size_t size, size_t content_length) {
   // size: number
 
   cJSON *obj = cJSON_CreateObject();
@@ -671,7 +672,7 @@ int html_encode_recv_js_msg(void *data, size_t size, size_t content_length) {
   return strlen(data);
 }
 
-int html_encode_close_request(void *data, size_t size) {
+int html_encode_imsg_close_req(void *data, size_t size) {
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
     return -1;
@@ -686,8 +687,7 @@ int html_encode_close_request(void *data, size_t size) {
   return strlen(data);
 }
 
-static int html_decode_recv_js_msg(cJSON *obj,
-                                   struct html_begin_recv_js_msg *msg) {
+static int html_decode_recv_js_msg(cJSON *obj, struct html_imsg_app_msg *msg) {
   // size: number
   // TODO - factor this size calc out
   cJSON *size = cJSON_GetObjectItem(obj, "size");
@@ -724,7 +724,7 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
     ret = html_decode_submit_form_msg(obj, &msg->msg.form);
   } else if (type_val == HTML_IMSG_APP_MSG) {
     msg->type = HTML_IMSG_APP_MSG;
-    ret = html_decode_recv_js_msg(obj, &msg->msg.js_msg);
+    ret = html_decode_recv_js_msg(obj, &msg->msg.app_msg);
   } else if (type_val == HTML_IMSG_CLOSE_REQ) {
     msg->type = HTML_IMSG_CLOSE_REQ;
     ret = 1;
@@ -768,7 +768,7 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
   }
 
   const char *x_www_form_urlencoded = "application/x-www-form-urlencoded";
-  struct html_begin_submit_form *form = &msg.msg.form;
+  struct html_imsg_form *form = &msg.msg.form;
   if (strcmp(form->mime_type, x_www_form_urlencoded) != 0) {
     printf_err(con, "Unexpected form mime type '%s' (expected '%s')",
                form->mime_type, x_www_form_urlencoded);
@@ -826,7 +826,7 @@ int html_recv_js_message(html_connection *con, void *data, size_t size) {
     return -1;
   }
 
-  struct html_begin_recv_js_msg *js_msg = &msg.msg.js_msg;
+  struct html_imsg_app_msg *js_msg = &msg.msg.app_msg;
   if (js_msg->content_length + 1 > size) {
     printf_err(con,
                "Buffer of size %lu is too small for message of "
@@ -1125,8 +1125,8 @@ fail:
   return 0;
 }
 
-int html_encode_mime_map_apply(void *data, size_t size,
-                               const html_mime_map *mimes) {
+int html_encode_omsg_mime_map(void *data, size_t size,
+                              const html_mime_map *mimes) {
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
     return -1;
@@ -1155,7 +1155,7 @@ int html_mime_map_apply(html_connection *con, const html_mime_map *mimes) {
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_mime_map_apply(buf, sizeof(buf), mimes);
+  int n = html_encode_omsg_mime_map(buf, sizeof(buf), mimes);
   if (n < 0) {
     printf_err(con, "Failed to encode mime map message (usually "
                     "memory constraint)");

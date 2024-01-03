@@ -179,7 +179,7 @@ private:
       do_navigate(msg.msg.navigate);
       break;
     case HTML_OMSG_APP_MSG:
-      do_send_js_msg(msg.msg.js_msg);
+      do_send_js_msg(msg.msg.app_msg);
       break;
     case HTML_OMSG_MIME_MAP:
       do_map_mimes(msg.msg.mime);
@@ -212,7 +212,7 @@ private:
     std::cerr << '[' << session_id_ << "] CLOSE-REQ" << std::endl;
     submit_buf_.resize(HTML_MSG_SIZE);
     int msg_size =
-        html_encode_close_request(submit_buf_.data(), submit_buf_.size());
+        html_encode_imsg_close_req(submit_buf_.data(), submit_buf_.size());
     if (msg_size < 0) {
       std::cerr << "Failed to encode close msg" << std::endl;
       return end_ws();
@@ -298,8 +298,8 @@ private:
 
     // TODO - need to sync w/ POST
     submit_buf_.resize(HTML_MSG_SIZE);
-    if (html_encode_recv_js_msg(submit_buf_.data(), submit_buf_.size(),
-                                msg.size()) < 0) {
+    if (html_encode_imsg_app_msg(submit_buf_.data(), submit_buf_.size(),
+                                 msg.size()) < 0) {
       std::cerr << "Failed to encode recv msg" << std::endl;
       return end_ws();
     }
@@ -360,8 +360,8 @@ private:
       }
 
       submit_buf_.resize(HTML_MSG_SIZE);
-      if (!html_encode_submit_form(submit_buf_.data(), submit_buf_.size(),
-                                   req.body().size(), ctype.c_str())) {
+      if (!html_encode_imsg_form(submit_buf_.data(), submit_buf_.size(),
+                                 req.body().size(), ctype.c_str())) {
         return respond400("Failed to encode form submission", std::move(req));
       }
 
@@ -504,7 +504,7 @@ private:
     return res;
   }
 
-  void do_read_upload(const begin_upload &msg) {
+  void do_read_upload(const html_omsg_upload &msg) {
     auto contents = std::make_shared<std::string>();
     contents->resize(msg.content_length);
     std::cerr << '[' << session_id_ << "] UPLOAD " << msg.url << std::endl;
@@ -594,7 +594,7 @@ private:
     do_recv();
   }
 
-  void do_navigate(const navigate &msg) {
+  void do_navigate(const html_omsg_navigate &msg) {
     std::ostringstream os;
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     std::cerr << "Opening " << os.str() << std::endl;
@@ -611,7 +611,7 @@ private:
     do_recv();
   }
 
-  void do_send_js_msg(const js_message &msg) {
+  void do_send_js_msg(const html_omsg_app_msg &msg) {
     ws_send_buf_.resize(msg.content_length);
     my::async_readn(stream_, asio::buffer(ws_send_buf_), msg.content_length,
                     bind(&self::on_recv_js_msg_content));

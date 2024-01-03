@@ -31,8 +31,8 @@ struct f {
 
   void send(const std::string_view &sv) {
     char buf[HTML_MSG_SIZE];
-    int n = html_encode_submit_form(buf, sizeof(buf), sv.size(),
-                                    "application/x-www-form-urlencoded");
+    int n = html_encode_imsg_form(buf, sizeof(buf), sv.size(),
+                                  "application/x-www-form-urlencoded");
 
     BOOST_REQUIRE(n > 0);
 
