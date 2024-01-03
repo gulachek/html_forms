@@ -130,6 +130,15 @@ cli((book, opts) => {
 		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
 	});
 
+	const loadingHtml = Path.src('src/loading.html');
+	const loadingHtmlCpp = Path.build('loading_html.cpp');
+	book.add(loadingHtmlCpp, [loadingHtml], async (args) => {
+		const [cpp, html] = args.absAll(loadingHtmlCpp, loadingHtml);
+
+		const buf = await readFile(html);
+		await writeFile(cpp, bufToCppArray('loading_html', buf), 'utf8');
+	});
+
 	const cppServer = c.addExecutable({
 		name: 'server',
 		precompiledHeader: 'private/asio-pch.hpp',
@@ -149,6 +158,7 @@ cli((book, opts) => {
 			'src/browser.cpp',
 			'src/parse_target.cpp',
 			formsJsCpp,
+			loadingHtmlCpp,
 		],
 		link: ['catui', htmlLib, 'boost-json', 'boost-filesystem', 'libarchive'],
 	});

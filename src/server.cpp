@@ -354,10 +354,10 @@ private:
                      bind(&self::submit_post, std::make_shared<std::string>(
                                                   std::move(req.body()))));
 
-      my::string_response res{http::status::ok, req.version()};
+      my::string_response res{http::status::see_other, req.version()};
       res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
       res.keep_alive(req.keep_alive());
-      res.set(http::field::content_type, "text/plain");
+      res.set(http::field::location, "/html/loading.html");
       res.content_length(2);
       res.body() = "ok";
       res.prepare_payload();

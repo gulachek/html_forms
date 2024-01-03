@@ -14,6 +14,7 @@ using tcp = boost::asio::ip::tcp;
 
 // implemented in generated file (see make.js)
 std::span<const std::uint8_t> forms_js();
+std::span<const std::uint8_t> loading_html();
 
 using session_map = std::map<std::string, std::weak_ptr<http_session>>;
 
@@ -109,6 +110,9 @@ public:
   void respond(const std::string_view &target) {
     if (target == "/forms.js")
       return respond_span("text/javascript", forms_js());
+
+    if (target == "/loading.html")
+      return respond_span("text/html", loading_html());
 
     return respond404("Not found");
   }
