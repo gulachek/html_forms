@@ -1,3 +1,5 @@
+let ws;
+
 const keyMap = {
 	h: 'left',
 	j: 'down',
@@ -17,7 +19,7 @@ function onKeyDown(key) {
 	const dir = keyMap[key];
 	if (!dir) return;
 
-	HtmlForms.sendMessage(dir);
+	ws.send(dir);
 }
 
 let lastMsg;
@@ -65,11 +67,27 @@ async function main() {
 	const ctx = canvas.getContext('2d');
 	resizeCanvas(canvas);
 
-	HtmlForms.on('message', (msg) => {
+	ws = HtmlForms.connect();
+
+	ws.addEventListener('open', () => {
+		ws.send('<sync>');
+		started = true;
+	});
+
+	ws.addEventListener('error', (e) => {
+		console.error(e);
+		alert('An error occurred. See console for details');
+	});
+
+	ws.addEventListener('close', () => {
+		alert('Disconnected. Please close the window.');
+	});
+
+	ws.addEventListener('message', (e) => {
 		try {
-			lastMsg = JSON.parse(msg);
-		} catch (e) {
-			console.error(e);
+			lastMsg = JSON.parse(e.data);
+		} catch (er) {
+			console.error(er);
 			alert('Error parsing JSON message. See console for details.');
 		}
 
@@ -84,9 +102,6 @@ async function main() {
 		resizeCanvas(canvas);
 		render(canvas, ctx);
 	});
-
-	await HtmlForms.sendMessage('<sync>');
-	started = true;
 }
 
 window.addEventListener('load', () => {
