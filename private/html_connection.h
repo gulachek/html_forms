@@ -1,7 +1,7 @@
 #ifndef HTML_CONNECTION_H
 #define HTML_CONNECTION_H
 
-#include "html-forms.h"
+#include "html_forms.h"
 
 struct html_connection_ {
   int fd;

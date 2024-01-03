@@ -17,12 +17,12 @@ cli((book, opts) => {
 	book.add('all', [config]);
 
 	const htmlLib = c.addLibrary({
-		name: 'html-forms',
+		name: 'html_forms',
 		privateDefinitions: {
 			HTML_API: 'EXPORT',
 		},
 		privateIncludes: ['private'],
-		src: ['src/html-forms.c'],
+		src: ['src/html_forms.c'],
 		link: ['msgstream', 'cjson', 'catui'],
 	});
 
@@ -189,7 +189,7 @@ cli((book, opts) => {
 	const cmds = c.addCompileCommands();
 
 	const doxygen = Path.build('docs/html/index.html');
-	book.add(doxygen, ['Doxyfile', 'include/html-forms.h'], (args) => {
+	book.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
 		return args.spawn('doxygen');
 	});
 

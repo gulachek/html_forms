@@ -1,7 +1,7 @@
 #define BOOST_TEST_MODULE escape_string_test
 #include <boost/test/unit_test.hpp>
 
-#include "html-forms.h"
+#include "html_forms.h"
 #include <string_view>
 #include <vector>
 

@@ -1,4 +1,4 @@
-#include <html-forms.h>
+#include <html_forms.h>
 
 #include <stdio.h>
 #include <string.h>

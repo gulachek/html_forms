@@ -1,8 +1,8 @@
 #define BOOST_TEST_MODULE parse_form_test
 #include <boost/test/unit_test.hpp>
 
-#include "html-forms.h"
 #include "html_connection.h"
+#include "html_forms.h"
 #include <msgstream.h>
 
 struct f {
