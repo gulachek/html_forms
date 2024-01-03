@@ -798,13 +798,14 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
   return HTML_OK;
 }
 
-int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
+enum html_error_code html_recv(html_connection *con, void *data, size_t size,
+                               size_t *msg_size) {
   if (!con)
-    return 0;
+    return HTML_ERROR;
 
   if (!msg_size) {
     printf_err(con, "null 'msg_size' argument");
-    return 0;
+    return HTML_ERROR;
   }
 
   int fd = con->fd;
@@ -814,18 +815,23 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
   int ec = msgstream_fd_recv(fd, buf, sizeof(buf), &n);
   if (ec) {
     printf_err(con, "Failed to receive app message: %s", msgstream_errstr(ec));
-    return 0;
+    return HTML_ERROR;
   }
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg)) {
     printf_err(con, "Failed to parse input message");
-    return 0;
+    return HTML_ERROR;
   }
 
   if (msg.type != HTML_IMSG_APP_MSG) {
-    printf_err(con, "Unexpected message type '%d'", msg.type);
-    return 0;
+    if (msg.type == HTML_IMSG_CLOSE_REQ) {
+      printf_err(con, "Close requested by user");
+      return HTML_CLOSE_REQ;
+    } else {
+      printf_err(con, "Unexpected message type: %d", msg.type);
+      return HTML_ERROR;
+    }
   }
 
   struct html_imsg_app_msg *app_msg = &msg.msg.app_msg;
@@ -835,7 +841,7 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
                "size %lu (and a "
                "null terminator)",
                size, app_msg->content_length);
-    return 0;
+    return HTML_ERROR;
   }
 
   // TODO - factor out readn
@@ -843,13 +849,13 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
   while (nread < app_msg->content_length) {
     ssize_t ret = read(fd, data + nread, app_msg->content_length - nread);
     if (ret < 1)
-      return 0;
+      return HTML_ERROR;
 
     nread += ret;
   }
 
   *msg_size = app_msg->content_length;
-  return 1;
+  return HTML_OK;
 }
 
 struct html_form_field {

@@ -99,10 +99,11 @@ int main(int argc, char **argv) {
   std::array<char, 32> sync;
   std::size_t msg_size;
 
-  if (!html_recv(con, sync.data(), sync.size(), &msg_size)) {
+  auto ec = html_recv(con, sync.data(), sync.size(), &msg_size);
+  if (ec) {
     std::cerr << "Failed to receive sync message" << html_errmsg(con)
               << std::endl;
-    return 1;
+    return ec != HTML_CLOSE_REQ;
   }
 
   game snake{con};
@@ -114,9 +115,9 @@ int main(int argc, char **argv) {
     snake.input_loop();
   } catch (const std::exception &ex) {
     std::cerr << "Error in input loop: " << ex.what() << std::endl;
-    snake.stop();
   }
 
+  snake.stop();
   game_th.join();
 
   html_disconnect(con);
@@ -128,7 +129,11 @@ void game::stop() noexcept { running_ = false; }
 void game::input_loop() {
   while (true) {
     std::size_t msg_size;
-    if (!html_recv(con_, in_buf_.data(), in_buf_.size(), &msg_size)) {
+    auto ec = html_recv(con_, in_buf_.data(), in_buf_.size(), &msg_size);
+    if (ec) {
+      if (ec == HTML_CLOSE_REQ)
+        return;
+
       std::ostringstream os;
       os << "Error reading input message: " << html_errmsg(con_);
       throw std::runtime_error{os.str()};

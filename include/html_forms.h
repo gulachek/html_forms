@@ -214,10 +214,10 @@ int HTML_API html_send(html_connection *con, const void *data, size_t size);
  * @param[in] data Pointer to a buffer of size @a size bytes
  * @param[in] size Size in bytes of buffer pointed to by @a data
  * @param[out] msg_size Size in bytes of message received
- * @return 1 on success, 0 on failure
+ * @return Error code
  */
-int HTML_API html_recv(html_connection *con, void *data, size_t size,
-                       size_t *msg_size);
+enum html_error_code HTML_API html_recv(html_connection *con, void *data,
+                                        size_t size, size_t *msg_size);
 
 /**
  * Read an `application/x-www-form-urlencoded` form
