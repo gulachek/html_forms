@@ -1,11 +1,8 @@
 window.addEventListener('submit', (e) => {
 	const form = e.target as HTMLFormElement;
 	if (!form) return;
-	if (!form.hasAttribute('action')) {
+	if (!(form.hasAttribute('action') || form.hasAttribute('method'))) {
 		form.action = '~/submit';
-	}
-
-	if (!form.hasAttribute('method')) {
 		form.method = 'POST';
 	}
 });
