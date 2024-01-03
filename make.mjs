@@ -74,6 +74,15 @@ cli((book, opts) => {
 		link: [htmlLib, 'sqlite3'],
 	});
 
+	const loading = c.addExecutable({
+		name: 'loading',
+		src: ['example/loading/main.cpp'],
+		privateDefinitions: {
+			DOCROOT_PATH: `"${book.abs(Path.src('example/loading/docroot'))}"`,
+		},
+		link: [htmlLib],
+	});
+
 	const snake = c.addExecutable({
 		name: 'snake',
 		src: ['example/snake/main.cpp'],
@@ -84,7 +93,7 @@ cli((book, opts) => {
 	});
 
 	const example = Path.build('example');
-	book.add(example, [mimeSwap, tarball, tarballArchive, todo, snake]);
+	book.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 
 	const platformDef = {};
 	switch (platform()) {
