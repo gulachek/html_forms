@@ -177,7 +177,7 @@ cli((book, opts) => {
 	const cmds = c.addCompileCommands();
 
 	const doxygen = Path.build('docs/html/index.html');
-	book.add(doxygen, ['include/html-forms.h'], (args) => {
+	book.add(doxygen, ['Doxyfile', 'include/html-forms.h'], (args) => {
 		return args.spawn('doxygen');
 	});
 
