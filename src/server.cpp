@@ -1,20 +1,7 @@
-//
-// Copyright (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
-//
-// Distributed under the Boost Software License, Version 1.0. (See accompanying
-// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-//
-// Official repository: https://github.com/boostorg/beast
-//
-
-//------------------------------------------------------------------------------
-//
-// Example: HTTP server, asynchronous
-//
-//------------------------------------------------------------------------------
 #include "asio-pch.hpp"
 #include "browser.hpp"
 #include "html_forms.h"
+#include "html_forms/encoding.h"
 #include "http_listener.hpp"
 #include "mime_type.hpp"
 #include "my-asio.hpp"

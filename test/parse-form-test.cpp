@@ -3,6 +3,7 @@
 
 #include "html_connection.h"
 #include "html_forms.h"
+#include "html_forms/encoding.h"
 #include <msgstream.h>
 
 struct f {
