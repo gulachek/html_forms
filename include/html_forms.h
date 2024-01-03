@@ -201,21 +201,23 @@ int HTML_API html_navigate(html_connection *con, const char *url);
 
 /**
  * Send an application-defined message to the user
- * @param con The connection
- * @param msg A null terminated string of the message to send
- * @return A non-negative number on success, -1 on failure
+ * @param[in] con The connection
+ * @param[in] data Pointer to buffer holding application-defined message
+ * @param[in] size Size in bytes of the message to send
+ * @return 1 on success, 0 on failure
  */
-int HTML_API html_send_js_message(html_connection *con, const char *msg);
+int HTML_API html_send(html_connection *con, const void *data, size_t size);
 
 /**
  * Receive an application-defined message from the user
- * @param con The connection
- * @param data Pointer to a buffer of size @a size bytes
- * @param size Size in bytes of buffer pointed to by @a data
- * @return The size of the received message in bytes, -1 on failure
+ * @param[in] con The connection
+ * @param[in] data Pointer to a buffer of size @a size bytes
+ * @param[in] size Size in bytes of buffer pointed to by @a data
+ * @param[out] msg_size Size in bytes of message received
+ * @return 1 on success, 0 on failure
  */
-int HTML_API html_recv_js_message(html_connection *con, void *data,
-                                  size_t size);
+int HTML_API html_recv(html_connection *con, void *data, size_t size,
+                       size_t *msg_size);
 
 /**
  * Read an `application/x-www-form-urlencoded` form

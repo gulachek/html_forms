@@ -178,7 +178,7 @@ private:
       do_navigate(msg.msg.navigate);
       break;
     case HTML_OMSG_APP_MSG:
-      do_send_js_msg(msg.msg.app_msg);
+      do_send_app_msg(msg.msg.app_msg);
       break;
     case HTML_OMSG_MIME_MAP:
       do_map_mimes(msg.msg.mime);
@@ -289,18 +289,18 @@ private:
     }
 
     asio::dispatch(stream_.get_executor(),
-                   bind(&self::submit_recv_js_msg,
+                   bind(&self::submit_recv_app_msg,
                         std::make_shared<std::string>(std::move(msg))));
   }
 
-  void submit_recv_js_msg(std::shared_ptr<std::string> msg) {
+  void submit_recv_app_msg(std::shared_ptr<std::string> msg) {
     auto buf = asio::buffer(submit_buf_.data(), HTML_MSG_SIZE);
     my::async_msgstream_send(stream_, buf, submit_buf_.size(),
-                             bind(&self::on_submit_recv_js_msg, msg));
+                             bind(&self::on_submit_recv_app_msg, msg));
   }
 
-  void on_submit_recv_js_msg(std::shared_ptr<std::string> msg,
-                             std::error_condition ec, std::size_t n) {
+  void on_submit_recv_app_msg(std::shared_ptr<std::string> msg,
+                              std::error_condition ec, std::size_t n) {
     if (ec) {
       std::cerr << "Failed to send RECV msg" << std::endl;
       return end_catui();
@@ -308,11 +308,11 @@ private:
 
     asio::async_write(stream_, asio::buffer(*msg),
                       asio::transfer_exactly(msg->size()),
-                      bind(&self::on_send_recv_js_msg_content, msg));
+                      bind(&self::on_send_recv_app_msg_content, msg));
   }
 
-  void on_send_recv_js_msg_content(std::shared_ptr<std::string> msg,
-                                   std::error_code ec, std::size_t n) {
+  void on_send_recv_app_msg_content(std::shared_ptr<std::string> msg,
+                                    std::error_code ec, std::size_t n) {
     if (ec) {
       std::cerr << "Failed to send RECV msg content" << std::endl;
       return end_catui();
@@ -595,13 +595,13 @@ private:
     do_recv();
   }
 
-  void do_send_js_msg(const html_omsg_app_msg &msg) {
+  void do_send_app_msg(const html_omsg_app_msg &msg) {
     ws_send_buf_.resize(msg.content_length);
     my::async_readn(stream_, asio::buffer(ws_send_buf_), msg.content_length,
-                    bind(&self::on_recv_js_msg_content));
+                    bind(&self::on_recv_app_msg_content));
   }
 
-  void on_recv_js_msg_content(std::error_code ec, std::size_t n) {
+  void on_recv_app_msg_content(std::error_code ec, std::size_t n) {
     if (ec) {
       return end_catui();
     }

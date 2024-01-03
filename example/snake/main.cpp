@@ -97,7 +97,13 @@ int main(int argc, char **argv) {
   }
 
   std::array<char, 32> sync;
-  html_recv_js_message(con, sync.data(), sync.size());
+  std::size_t msg_size;
+
+  if (!html_recv(con, sync.data(), sync.size(), &msg_size)) {
+    std::cerr << "Failed to receive sync message" << html_errmsg(con)
+              << std::endl;
+    return 1;
+  }
 
   game snake{con};
 
@@ -121,9 +127,8 @@ void game::stop() noexcept { running_ = false; }
 
 void game::input_loop() {
   while (true) {
-    int msg_size = html_recv_js_message(con_, in_buf_.data(), in_buf_.size());
-
-    if (msg_size < 0) {
+    std::size_t msg_size;
+    if (!html_recv(con_, in_buf_.data(), in_buf_.size(), &msg_size)) {
       std::ostringstream os;
       os << "Error reading input message: " << html_errmsg(con_);
       throw std::runtime_error{os.str()};
@@ -248,7 +253,7 @@ void game::render() noexcept {
   output["fruit"] = json::array{fruit_[0], fruit_[1]};
 
   auto msg = json::serialize(output);
-  if (html_send_js_message(con_, msg.c_str()) < 0) {
+  if (!html_send(con_, msg.data(), msg.size())) {
     std::cerr << "Failed to send message: " << html_errmsg(con_) << std::endl;
   }
 }

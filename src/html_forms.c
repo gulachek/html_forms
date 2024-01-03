@@ -418,33 +418,31 @@ int html_encode_omsg_app_msg(void *data, size_t size, size_t content_length) {
   return strlen(data);
 }
 
-// TODO - return value to bool
-int html_send_js_message(html_connection *con, const char *msg) {
+int html_send(html_connection *con, const void *data, size_t size) {
   if (!con)
-    return -1;
+    return 0;
 
   int fd = con->fd;
 
   char buf[HTML_MSG_SIZE];
-  size_t msg_size = strlen(msg);
-  int n = html_encode_omsg_app_msg(buf, sizeof(buf), msg_size);
+  int n = html_encode_omsg_app_msg(buf, sizeof(buf), size);
   if (n < 0) {
     printf_err(con, "Failed to serialize message (likely memory issue)");
-    return n;
+    return 0;
   }
 
   int ec = msgstream_fd_send(fd, buf, sizeof(buf), n);
   if (ec) {
     printf_err(con, "Failed to send message: %s", msgstream_errstr(ec));
-    return -1;
+    return 0;
   }
 
-  if (write(fd, msg, msg_size) == -1) {
+  if (write(fd, data, size) == -1) {
     printf_err(con, "Failed to write contents of message: %s", strerror(errno));
-    return -1;
+    return 0;
   }
 
-  return msg_size;
+  return 1;
 }
 
 static int copy_string(cJSON *obj, const char *prop, char *out,
@@ -519,7 +517,7 @@ static int html_decode_navigate_msg(cJSON *obj,
   return 1;
 }
 
-static int html_decode_js_msg(cJSON *obj, struct html_omsg_app_msg *msg) {
+static int html_decode_app_msg(cJSON *obj, struct html_omsg_app_msg *msg) {
   cJSON *size = cJSON_GetObjectItem(obj, "size");
   if (!(size && cJSON_IsNumber(size)))
     return 0;
@@ -591,7 +589,7 @@ int html_decode_out_msg(const void *data, size_t size,
     ret = html_decode_navigate_msg(obj, &msg->msg.navigate);
   } else if (type_val == HTML_OMSG_APP_MSG) {
     msg->type = HTML_OMSG_APP_MSG;
-    ret = html_decode_js_msg(obj, &msg->msg.app_msg);
+    ret = html_decode_app_msg(obj, &msg->msg.app_msg);
   } else if (type_val == HTML_OMSG_MIME_MAP) {
     msg->type = HTML_OMSG_MIME_MAP;
     msg->msg.mime = html_mime_map_create();
@@ -687,7 +685,7 @@ int html_encode_imsg_close_req(void *data, size_t size) {
   return strlen(data);
 }
 
-static int html_decode_recv_js_msg(cJSON *obj, struct html_imsg_app_msg *msg) {
+static int html_decode_recv_app_msg(cJSON *obj, struct html_imsg_app_msg *msg) {
   // size: number
   // TODO - factor this size calc out
   cJSON *size = cJSON_GetObjectItem(obj, "size");
@@ -724,7 +722,7 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
     ret = html_decode_submit_form_msg(obj, &msg->msg.form);
   } else if (type_val == HTML_IMSG_APP_MSG) {
     msg->type = HTML_IMSG_APP_MSG;
-    ret = html_decode_recv_js_msg(obj, &msg->msg.app_msg);
+    ret = html_decode_recv_app_msg(obj, &msg->msg.app_msg);
   } else if (type_val == HTML_IMSG_CLOSE_REQ) {
     msg->type = HTML_IMSG_CLOSE_REQ;
     ret = 1;
@@ -800,10 +798,14 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
   return HTML_OK;
 }
 
-// TODO - return val to bool
-int html_recv_js_message(html_connection *con, void *data, size_t size) {
+int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
   if (!con)
-    return -1;
+    return 0;
+
+  if (!msg_size) {
+    printf_err(con, "null 'msg_size' argument");
+    return 0;
+  }
 
   int fd = con->fd;
   uint8_t buf[HTML_MSG_SIZE];
@@ -811,43 +813,43 @@ int html_recv_js_message(html_connection *con, void *data, size_t size) {
 
   int ec = msgstream_fd_recv(fd, buf, sizeof(buf), &n);
   if (ec) {
-    printf_err(con, "Failed to receive js message: %s", msgstream_errstr(ec));
-    return -1;
+    printf_err(con, "Failed to receive app message: %s", msgstream_errstr(ec));
+    return 0;
   }
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg)) {
     printf_err(con, "Failed to parse input message");
-    return -1;
+    return 0;
   }
 
   if (msg.type != HTML_IMSG_APP_MSG) {
     printf_err(con, "Unexpected message type '%d'", msg.type);
-    return -1;
+    return 0;
   }
 
-  struct html_imsg_app_msg *js_msg = &msg.msg.app_msg;
-  if (js_msg->content_length + 1 > size) {
+  struct html_imsg_app_msg *app_msg = &msg.msg.app_msg;
+  if (app_msg->content_length + 1 > size) {
     printf_err(con,
                "Buffer of size %lu is too small for message of "
                "size %lu (and a "
                "null terminator)",
-               size, js_msg->content_length);
-    return -1;
+               size, app_msg->content_length);
+    return 0;
   }
 
   // TODO - factor out readn
   int nread = 0;
-  while (nread < js_msg->content_length) {
-    ssize_t ret = read(fd, data + nread, js_msg->content_length - nread);
+  while (nread < app_msg->content_length) {
+    ssize_t ret = read(fd, data + nread, app_msg->content_length - nread);
     if (ret < 1)
-      return -1;
+      return 0;
 
     nread += ret;
   }
 
-  ((char *)data)[nread] = '\0';
-  return nread;
+  *msg_size = app_msg->content_length;
+  return 1;
 }
 
 struct html_form_field {
