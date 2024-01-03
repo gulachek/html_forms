@@ -510,11 +510,12 @@ private:
     std::cerr << '[' << session_id_ << "] UPLOAD " << msg.url << std::endl;
 
     my::async_readn(stream_, asio::buffer(*contents), msg.content_length,
-                    bind(&self::on_read_upload, msg.is_archive,
+                    bind(&self::on_read_upload, msg.rtype,
                          std::make_shared<std::string>(msg.url), contents));
   }
 
-  void on_read_upload(bool is_archive, std::shared_ptr<std::string> url,
+  void on_read_upload(html_resource_type rtype,
+                      std::shared_ptr<std::string> url,
                       std::shared_ptr<std::string> contents, std::error_code ec,
                       std::size_t n) {
     if (ec) {
@@ -522,7 +523,7 @@ private:
       return end_catui();
     }
 
-    if (is_archive) {
+    if (rtype == HTML_RT_ARCHIVE) {
       struct archive *a;
       a = archive_read_new();
       archive_read_support_filter_all(a);
@@ -579,12 +580,15 @@ private:
 
       archive_read_free(a);
 
-    } else {
+    } else if (rtype == HTML_RT_FILE) {
       auto path = upload_path(*url);
       std::ofstream of{path};
       // TODO - error handling
       of.write(contents->data(), n);
       of.close();
+    } else {
+      std::cerr << "Unknown resource type '" << rtype << '\'' << std::endl;
+      return end_catui();
     }
 
     do_recv();

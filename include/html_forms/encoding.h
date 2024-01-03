@@ -55,6 +55,12 @@ enum html_out_msg_type {
   HTML_MIME_MAP = 3      /**< Map file extensions to MIME types */
 };
 
+/** Resource types to be uploaded */
+enum html_resource_type {
+  HTML_RT_FILE = 0,   /**< Plain file is uploaded */
+  HTML_RT_ARCHIVE = 1 /**< Archive (like .tar.gz) is uploaded */
+};
+
 /** @cond PRIVATE Remove these typedefs */
 typedef char html_mime_buf[HTML_MIME_SIZE];
 typedef char html_url_buf[HTML_URL_SIZE];
@@ -63,9 +69,9 @@ typedef char html_form_buf[HTML_FORM_SIZE];
 
 /** Upload resources */
 struct begin_upload {
-  size_t content_length; /**< The file or archive size in bytes */
-  int is_archive;        /**< 1 if archive, 0 if regular file */
-  html_url_buf url;      /**< URL to point at the resource */
+  size_t content_length;         /**< The file or archive size in bytes */
+  enum html_resource_type rtype; /**< The resource type */
+  html_url_buf url;              /**< URL to point at the resource */
 };
 
 /** Navigate to a relative URL */
@@ -141,11 +147,12 @@ struct html_in_msg {
  * @param[in] url The URL that the browser can request that will point to the
  * associated resource
  * @param[in] content_length The size of the uploaded file or archive in bytes
- * @param[in] is_archive 1 if the resource is an archive, 0 if a file
+ * @param[in] type The type of resource being uploaded
  * @return The size of the encoded message or -1 on failure
  */
 int HTML_API html_encode_upload(void *data, size_t size, const char *url,
-                                size_t content_length, int is_archive);
+                                size_t content_length,
+                                enum html_resource_type type);
 
 /**
  * Encode a message to send a mime map to the server

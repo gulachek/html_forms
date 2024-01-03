@@ -149,10 +149,10 @@ const char *html_errmsg(html_connection *con) {
 }
 
 int html_encode_upload(void *data, size_t size, const char *url,
-                       size_t content_length, int is_archive) {
+                       size_t content_length, enum html_resource_type type) {
   // url: string
   // size: number
-  // archive: bool
+  // resType: number
 
   cJSON *obj = cJSON_CreateObject();
   if (!obj)
@@ -167,7 +167,7 @@ int html_encode_upload(void *data, size_t size, const char *url,
   if (!cJSON_AddStringToObject(obj, "url", url))
     return -1;
 
-  if (!cJSON_AddBoolToObject(obj, "archive", !!is_archive)) {
+  if (!cJSON_AddNumberToObject(obj, "resType", type)) {
     return -1;
   }
 
@@ -179,7 +179,8 @@ int html_encode_upload(void *data, size_t size, const char *url,
 }
 
 static int html_send_upload(html_connection *con, const char *url,
-                            const char *file_path, int is_archive) {
+                            const char *file_path,
+                            enum html_resource_type type) {
 
   if (!con)
     return 0;
@@ -193,7 +194,7 @@ static int html_send_upload(html_connection *con, const char *url,
   }
 
   char buf[HTML_MSG_SIZE];
-  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, is_archive);
+  int n = html_encode_upload(buf, sizeof(buf), url, stats.st_size, type);
   if (n < 0) {
     printf_err(con, "Failed to serialize message (likely memory issue)");
     return 0;
@@ -235,12 +236,12 @@ static int html_send_upload(html_connection *con, const char *url,
 
 int html_upload_file(html_connection *con, const char *url,
                      const char *file_path) {
-  return html_send_upload(con, url, file_path, /* is_archive: */ 0);
+  return html_send_upload(con, url, file_path, HTML_RT_FILE);
 }
 
 int html_upload_archive(html_connection *con, const char *url,
                         const char *archive_path) {
-  return html_send_upload(con, url, archive_path, /* is_archive: */ 1);
+  return html_send_upload(con, url, archive_path, HTML_RT_ARCHIVE);
 }
 
 int html_upload_dir(html_connection *con, const char *url,
@@ -459,6 +460,32 @@ static int copy_string(cJSON *obj, const char *prop, char *out,
   return n <= out_size;
 }
 
+static int intval(cJSON *obj, const char *key, int *val) {
+  cJSON *item = cJSON_GetObjectItem(obj, key);
+  if (!(item && cJSON_IsNumber(item)))
+    return 0;
+
+  double dval = cJSON_GetNumberValue(item);
+  int ival = (int)dval;
+  if (ival != dval)
+    return 0;
+
+  *val = ival;
+  return 1;
+}
+
+static int uintval(cJSON *obj, const char *key, unsigned int *val) {
+  int ival;
+  if (!intval(obj, key, &ival))
+    return 0;
+
+  if (ival < 0)
+    return 0;
+
+  *val = (unsigned int)ival;
+  return 1;
+}
+
 static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   // url: string
   // size: number
@@ -466,21 +493,20 @@ static int html_decode_upload_msg(cJSON *obj, struct begin_upload *msg) {
   if (!copy_string(obj, "url", msg->url, sizeof(msg->url)))
     return 0;
 
-  cJSON *size = cJSON_GetObjectItem(obj, "size");
-  if (!(size && cJSON_IsNumber(size)))
-    return 0;
-  double size_val = cJSON_GetNumberValue(size);
-  if (size_val < 0)
-    return 0;
-  msg->content_length = (size_t)size_val;
-  if (msg->content_length != size_val)
+  unsigned int size;
+  if (!uintval(obj, "size", &size))
     return 0;
 
-  msg->is_archive = 0;
-  cJSON *archive = cJSON_GetObjectItem(obj, "archive");
-  if (cJSON_IsTrue(archive))
-    msg->is_archive = 1;
+  msg->content_length = (size_t)size;
 
+  unsigned int rtype;
+  if (!uintval(obj, "resType", &rtype))
+    return 0;
+
+  if (rtype > HTML_RT_ARCHIVE)
+    return 0;
+
+  msg->rtype = (enum html_resource_type)rtype;
   return 1;
 }
 
