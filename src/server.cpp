@@ -19,7 +19,6 @@ extern "C" {
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
-namespace json = boost::json;
 
 using asio::ip::tcp;
 
@@ -275,25 +274,10 @@ private:
     auto msg = beast::buffers_to_string(ws_buf_.data());
     ws_buf_.consume(size);
 
-    auto val = json::parse(msg);
-    if (!val.is_object()) {
-      std::cerr << "WS message is not a JSON object" << std::endl;
-      return end_ws();
-    }
-
-    // TODO validate this more
-    auto &obj = val.as_object();
-    auto &type = obj["type"].as_string();
-    if (type == "recv") {
-      auto &js_msg = obj["msg"].as_string();
-      do_send_recv_msg(js_msg);
-    } else {
-      std::cerr << "Invalid WS message type: " << type << std::endl;
-      return end_ws();
-    }
+    do_send_recv_msg(msg);
   }
 
-  void do_send_recv_msg(json::string &msg) {
+  void do_send_recv_msg(std::string &msg) {
     std::cerr << '[' << session_id_ << "] RECV: " << msg << std::endl;
 
     // TODO - need to sync w/ POST
@@ -624,10 +608,6 @@ private:
 
     std::cerr << '[' << session_id_ << "] SEND: " << ws_send_buf_ << std::endl;
 
-    json::object msg;
-    msg["type"] = "send";
-    msg["msg"] = std::move(ws_send_buf_);
-    ws_send_buf_ = json::serialize(msg);
     my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
                        bind(&self::on_ws_write));
   }

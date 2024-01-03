@@ -43,23 +43,6 @@ interface IShowAlertOpts {
 	title?: string;
 }
 
-// :)
-interface SendJsMessage {
-	type: 'send';
-	msg: string;
-}
-
-// application output to user
-type OutputMessage = SendJsMessage;
-
-interface RecvJsMessage {
-	type: 'recv';
-	msg: string;
-}
-
-// user input
-type InputMessage = RecvJsMessage;
-
 class Connection {
 	private ws: WebSocket;
 	private dialog: HTMLDialogElement;
@@ -123,9 +106,9 @@ class Connection {
 		this.dialog.showModal();
 	}
 
-	async send(msg: InputMessage): Promise<void> {
+	async send(msg: string): Promise<void> {
 		await this.isOpen;
-		this.ws.send(JSON.stringify(msg));
+		this.ws.send(msg);
 	}
 
 	onOpen(_e: Event) {
@@ -156,29 +139,12 @@ class Connection {
 	}
 
 	onMessage(e: MessageEvent) {
-		let obj: OutputMessage;
-		try {
-			obj = JSON.parse(e.data);
-		} catch (ex) {
-			alert('Error parsing JSON message from server. See console for details.');
-			console.error(ex);
-			return;
-		}
-
-		const type = obj.type;
-
-		switch (type) {
-			case 'send':
-				const received = events.emit('message', obj.msg);
-				if (!received) {
-					this.showAlert(
-						'The application sent a message but had not yet listened to messages in the browser',
-						{ title: 'Warning' },
-					);
-				}
-				break;
-			default:
-				this.showAlert(`Unknown action type: ${type}`);
+		const received = events.emit('message', e.data);
+		if (!received) {
+			this.showAlert(
+				'The application sent a message but had not yet listened to messages in the browser',
+				{ title: 'Warning' },
+			);
 		}
 	}
 }
@@ -187,5 +153,5 @@ const con = new Connection();
 con.start();
 
 export function sendMessage(msg: string): Promise<void> {
-	return con.send({ type: 'recv', msg });
+	return con.send(msg);
 }
