@@ -176,7 +176,12 @@ cli((book, opts) => {
 
 	const cmds = c.addCompileCommands();
 
-	book.add('all', [cppServer, cmds, test, browserBundle, example]);
+	const doxygen = Path.build('docs/html/index.html');
+	book.add(doxygen, ['include/html-forms.h'], (args) => {
+		return args.spawn('doxygen');
+	});
+
+	book.add('all', [cppServer, cmds, test, browserBundle, example, doxygen]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, cppServer);
