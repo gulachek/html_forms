@@ -1,6 +1,6 @@
 import { cli, Path } from 'esmakefile';
 import { C, platformCompiler } from 'esmakefile-c';
-import { writeFile, readFile } from 'node:fs/promises';
+import { writeFile, readFile, copyFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { addWebpack } from './WebpackRule.mjs';
 
@@ -123,7 +123,8 @@ cli((book, opts) => {
 
 	const cppServer = c.addExecutable({
 		name: 'server',
-		precompiledHeader: 'include/asio-pch.hpp',
+		precompiledHeader: 'private/asio-pch.hpp',
+		privateIncludes: ['private'],
 		privateDefinitions: {
 			...platformDef,
 			BROWSER_EXE: '"npx"',
@@ -137,14 +138,25 @@ cli((book, opts) => {
 			'src/my-asio.cpp',
 			'src/my-beast.cpp',
 			'src/browser.cpp',
+			'src/parse_target.cpp',
 			formsJsCpp,
 		],
 		link: ['catui', htmlLib, 'boost-json', 'boost-filesystem', 'libarchive'],
 	});
 
+	// TODO - allow precompiling translation unit to be added as source
+	const parseTarget = Path.src('src/parse_target.cpp');
+	const cpParseTarget = Path.build('parse_target_copy.cpp');
+	book.add(cpParseTarget, [parseTarget], async (args) => {
+		const [src, dest] = args.absAll(parseTarget, cpParseTarget);
+		await copyFile(src, dest);
+		return true;
+	});
+
 	const urlTest = c.addExecutable({
 		name: 'url_test',
-		src: ['test/url_test.cpp'],
+		privateIncludes: ['private'],
+		src: ['test/url_test.cpp', cpParseTarget],
 		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
 	});
 

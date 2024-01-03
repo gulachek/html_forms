@@ -489,12 +489,6 @@ const char *HTML_API html_form_value_at(const html_form *form, size_t i);
 const char *HTML_API html_form_value_of(const html_form *form,
                                         const char *field_name);
 
-/** @cond PRIVATE */
-int HTML_API html_parse_target(const char *target, char *session_id,
-                               size_t session_id_len, char *normalized_path,
-                               size_t norm_path_len);
-/** @endcond */
-
 #ifdef __cplusplus
 }
 #endif

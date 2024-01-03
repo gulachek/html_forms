@@ -1,6 +1,7 @@
 #include "http_listener.hpp"
 #include "html-forms.h"
 #include "mime_type.hpp"
+#include "parse_target.hpp"
 #include <complex>
 #include <span>
 
@@ -71,8 +72,8 @@ public:
     std::string target{req_.target()};
     char session_id[128], normalized_target[256];
     int parse_success =
-        html_parse_target(target.c_str(), session_id, sizeof(session_id),
-                          normalized_target, sizeof(normalized_target));
+        parse_target(target.c_str(), session_id, sizeof(session_id),
+                     normalized_target, sizeof(normalized_target));
 
     if (!parse_success)
       return respond404("Target path not parsed");

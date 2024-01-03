@@ -1,15 +1,15 @@
 #define BOOST_TEST_MODULE url_test
 #include <boost/test/unit_test.hpp>
 
-#include "html-forms.h"
+#include "parse_target.hpp"
 
 struct f {
   char session_id_[128];
   char target_path_[256];
 
   int parse(const char *target) {
-    return html_parse_target(target, session_id_, sizeof(session_id_),
-                             target_path_, sizeof(target_path_));
+    return parse_target(target, session_id_, sizeof(session_id_), target_path_,
+                        sizeof(target_path_));
   }
 
   void test(const char *target, const std::string_view &session_id,
