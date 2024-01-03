@@ -172,16 +172,16 @@ private:
     }
 
     switch (msg.type) {
-    case HTML_BEGIN_UPLOAD:
+    case HTML_OMSG_UPLOAD:
       do_read_upload(msg.msg.upload);
       break;
-    case HTML_NAVIGATE:
+    case HTML_OMSG_NAVIGATE:
       do_navigate(msg.msg.navigate);
       break;
-    case HTML_JS_MESSAGE:
+    case HTML_OMSG_APP_MSG:
       do_send_js_msg(msg.msg.js_msg);
       break;
-    case HTML_MIME_MAP:
+    case HTML_OMSG_MIME_MAP:
       do_map_mimes(msg.msg.mime);
       break;
     default:

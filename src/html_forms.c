@@ -158,7 +158,7 @@ int html_encode_upload(void *data, size_t size, const char *url,
   if (!obj)
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "type", HTML_BEGIN_UPLOAD))
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_UPLOAD))
     return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
@@ -363,7 +363,7 @@ int html_encode_navigate(void *data, size_t size, const char *url) {
   if (!obj)
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "type", HTML_NAVIGATE))
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_NAVIGATE))
     return -1;
 
   if (!cJSON_AddStringToObject(obj, "url", url))
@@ -404,7 +404,7 @@ int html_encode_js_message(void *data, size_t size, size_t content_length) {
   if (!obj)
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "type", HTML_JS_MESSAGE))
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_APP_MSG))
     return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
@@ -581,17 +581,17 @@ int html_decode_out_msg(const void *data, size_t size,
   int ret = 0;
   double type_val = cJSON_GetNumberValue(type);
 
-  if (type_val == HTML_BEGIN_UPLOAD) {
-    msg->type = HTML_BEGIN_UPLOAD;
+  if (type_val == HTML_OMSG_UPLOAD) {
+    msg->type = HTML_OMSG_UPLOAD;
     ret = html_decode_upload_msg(obj, &msg->msg.upload);
-  } else if (type_val == HTML_NAVIGATE) {
-    msg->type = HTML_NAVIGATE;
+  } else if (type_val == HTML_OMSG_NAVIGATE) {
+    msg->type = HTML_OMSG_NAVIGATE;
     ret = html_decode_navigate_msg(obj, &msg->msg.navigate);
-  } else if (type_val == HTML_JS_MESSAGE) {
-    msg->type = HTML_JS_MESSAGE;
+  } else if (type_val == HTML_OMSG_APP_MSG) {
+    msg->type = HTML_OMSG_APP_MSG;
     ret = html_decode_js_msg(obj, &msg->msg.js_msg);
-  } else if (type_val == HTML_MIME_MAP) {
-    msg->type = HTML_MIME_MAP;
+  } else if (type_val == HTML_OMSG_MIME_MAP) {
+    msg->type = HTML_OMSG_MIME_MAP;
     msg->msg.mime = html_mime_map_create();
     ret = html_decode_mime_msg(obj, msg->msg.mime);
   } else {
@@ -615,7 +615,7 @@ int html_encode_submit_form(void *data, size_t size, size_t content_length,
   if (!obj)
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "type", HTML_SUBMIT_FORM))
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_IMSG_FORM))
     return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
@@ -658,7 +658,7 @@ int html_encode_recv_js_msg(void *data, size_t size, size_t content_length) {
   if (!obj)
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "type", HTML_RECV_JS_MSG))
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_IMSG_APP_MSG))
     return -1;
 
   if (!cJSON_AddNumberToObject(obj, "size", content_length))
@@ -719,11 +719,11 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
   int ret = 0;
   double type_val = cJSON_GetNumberValue(type);
 
-  if (type_val == HTML_SUBMIT_FORM) {
-    msg->type = HTML_SUBMIT_FORM;
+  if (type_val == HTML_IMSG_FORM) {
+    msg->type = HTML_IMSG_FORM;
     ret = html_decode_submit_form_msg(obj, &msg->msg.form);
-  } else if (type_val == HTML_RECV_JS_MSG) {
-    msg->type = HTML_RECV_JS_MSG;
+  } else if (type_val == HTML_IMSG_APP_MSG) {
+    msg->type = HTML_IMSG_APP_MSG;
     ret = html_decode_recv_js_msg(obj, &msg->msg.js_msg);
   } else if (type_val == HTML_IMSG_CLOSE_REQ) {
     msg->type = HTML_IMSG_CLOSE_REQ;
@@ -757,7 +757,7 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
     return HTML_ERROR;
   }
 
-  if (msg.type != HTML_SUBMIT_FORM) {
+  if (msg.type != HTML_IMSG_FORM) {
     if (msg.type == HTML_IMSG_CLOSE_REQ) {
       printf_err(con, "Close requested by user");
       return HTML_CLOSE_REQ;
@@ -821,7 +821,7 @@ int html_recv_js_message(html_connection *con, void *data, size_t size) {
     return -1;
   }
 
-  if (msg.type != HTML_RECV_JS_MSG) {
+  if (msg.type != HTML_IMSG_APP_MSG) {
     printf_err(con, "Unexpected message type '%d'", msg.type);
     return -1;
   }
@@ -1131,7 +1131,7 @@ int html_encode_mime_map_apply(void *data, size_t size,
   if (!obj)
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "type", HTML_MIME_MAP))
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_MIME_MAP))
     return -1;
 
   if (!cJSON_AddItemReferenceToObject(obj, "map", mimes->array)) {

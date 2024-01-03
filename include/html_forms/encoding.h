@@ -42,17 +42,17 @@ extern "C" {
 
 /** Input message types */
 enum html_in_msg_type {
-  HTML_SUBMIT_FORM = 0,    /**< Form submission */
-  HTML_RECV_JS_MSG = 1,    /**< Application-defined message */
+  HTML_IMSG_FORM = 0,      /**< Form submission */
+  HTML_IMSG_APP_MSG = 1,   /**< Application-defined message */
   HTML_IMSG_CLOSE_REQ = 2, /**< Request to close application */
 };
 
 /** Output message types */
 enum html_out_msg_type {
-  HTML_BEGIN_UPLOAD = 0, /**< Upload resources */
-  HTML_NAVIGATE = 1,     /**< Navigate to a relative URL */
-  HTML_JS_MESSAGE = 2,   /**< Application-defined message */
-  HTML_MIME_MAP = 3      /**< Map file extensions to MIME types */
+  HTML_OMSG_UPLOAD = 0,   /**< Upload resources */
+  HTML_OMSG_NAVIGATE = 1, /**< Navigate to a relative URL */
+  HTML_OMSG_APP_MSG = 2,  /**< Application-defined message */
+  HTML_OMSG_MIME_MAP = 3  /**< Map file extensions to MIME types */
 };
 
 /** Resource types to be uploaded */
