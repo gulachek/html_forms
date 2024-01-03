@@ -3,10 +3,6 @@
 /**
  * @file
  * @brief HTML Forms C/C++ Public API
- * @example tarball/main.c
- * @example mime_swap/main.c
- * @example todo/main.c
- * @example snake/main.cpp
  */
 
 #include <stdio.h>

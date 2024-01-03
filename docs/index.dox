@@ -1,0 +1,10 @@
+/** @mainpage HTML Forms
+
+This is a C/C++ library for `com.gulachek.html-forms` clients. The functions are documented in @ref html-forms.h and there are several examples to explore.
+
+@example tarball/main.c
+@example mime_swap/main.c
+@example todo/main.c
+@example snake/main.cpp
+
+*/
