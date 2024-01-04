@@ -61,22 +61,16 @@ enum html_resource_type {
   HTML_RT_ARCHIVE = 1 /**< Archive (like .tar.gz) is uploaded */
 };
 
-/** @cond PRIVATE Remove these typedefs */
-typedef char html_mime_buf[HTML_MIME_SIZE];
-typedef char html_url_buf[HTML_URL_SIZE];
-typedef char html_form_buf[HTML_FORM_SIZE];
-/** @endcond */
-
 /** Upload resources */
 struct html_omsg_upload {
   size_t content_length;         /**< The file or archive size in bytes */
   enum html_resource_type rtype; /**< The resource type */
-  html_url_buf url;              /**< URL to point at the resource */
+  char url[HTML_URL_SIZE];       /**< URL to point at the resource */
 };
 
 /** Navigate to a relative URL */
 struct html_omsg_navigate {
-  html_url_buf url; /**< Relative URL */
+  char url[HTML_URL_SIZE]; /**< Relative URL */
 };
 
 /** Send an application-defined message */
@@ -116,7 +110,7 @@ struct html_imsg_form {
    * @remark The only currently supported type is
    * application/x-www-form-urlencoded
    */
-  html_mime_buf mime_type;
+  char mime_type[HTML_MIME_SIZE];
 };
 
 /** User sent an application-defined message */
