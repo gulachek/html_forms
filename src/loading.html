@@ -10,21 +10,29 @@
 				}
 			}
 
-			@keyframes spin {
-				from {
-					transform: rotate(0deg);
+			@keyframes spin-pulse {
+				0% {
+					transform: rotate(0deg) scale(1);
+					opacity: 1;
 				}
-				to {
-					transform: rotate(360deg);
+				50% {
+					transform: rotate(180deg) scale(0.75);
+					opacity: 0.5;
+				}
+				100% {
+					transform: rotate(360deg) scale(1);
+					opacity: 1;
 				}
 			}
 
 			@keyframes fade-in {
 				from {
+					transform: scale(0.25) rotate(180deg);
 					opacity: 0;
 				}
 				to {
-					opacity: 0.8;
+					transform: scale(1) rotate(360deg);
+					opacity: 1;
 				}
 			}
 
@@ -33,11 +41,15 @@
 				width: 50%;
 				max-width: 2in;
 				margin: 25vh auto;
-				fill: CanvasText;
 				opacity: 0;
+				fill: CanvasText;
+				--delay: 2s;
+				--period: 1.6s;
+				--fade-time: calc(var(--period) / 2);
 				animation:
-					spin 2.5s linear infinite,
-					fade-in 1s ease-in 2s forwards;
+					fade-in var(--fade-time) ease-in var(--delay) forwards,
+					spin-pulse var(--period) linear calc(var(--delay) + var(--fade-time))
+						infinite;
 			}
 		</style>
 	</head>
