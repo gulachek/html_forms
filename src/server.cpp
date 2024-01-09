@@ -63,7 +63,6 @@ public:
         all_sessions_dir_{all_sessions_dir} {}
 
   ~catui_connection() {
-    std::cerr << "Destructor for session " << session_id_ << std::endl;
     http_->remove_session(session_id_);
     browser_.release_window(window_id_);
 
@@ -183,10 +182,18 @@ private:
     case HTML_OMSG_MIME_MAP:
       do_map_mimes(msg.msg.mime);
       break;
+    case HTML_OMSG_CLOSE:
+      do_close();
+      break;
     default:
       std::cerr << "Invalid message type: " << msg.type << std::endl;
       break;
     }
+  }
+
+  void do_close() {
+    std::cerr << '[' << session_id_ << "] CLOSE" << std::endl;
+    end_catui();
   }
 
   void do_map_mimes(html_mime_map *mimes) {
@@ -266,8 +273,11 @@ private:
 
   void on_ws_read(beast::error_code ec, std::size_t size) {
     if (ec) {
-      std::cerr << "Failed to read ws message for session " << session_id_
-                << std::endl;
+      if (ec != beast::errc::operation_canceled) {
+        std::cerr << "Failed to read ws message for session " << session_id_
+                  << ": " << ec.message() << std::endl;
+      }
+
       return end_ws();
     }
 

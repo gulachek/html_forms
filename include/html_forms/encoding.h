@@ -52,7 +52,8 @@ enum html_out_msg_type {
   HTML_OMSG_UPLOAD = 0,   /**< Upload resources */
   HTML_OMSG_NAVIGATE = 1, /**< Navigate to a relative URL */
   HTML_OMSG_APP_MSG = 2,  /**< Application-defined message */
-  HTML_OMSG_MIME_MAP = 3  /**< Map file extensions to MIME types */
+  HTML_OMSG_MIME_MAP = 3, /**< Map file extensions to MIME types */
+  HTML_OMSG_CLOSE = 4,    /**< Close the connection */
 };
 
 /** Resource types to be uploaded */
@@ -207,6 +208,15 @@ int HTML_API html_encode_omsg_navigate(void *data, size_t size,
  */
 int HTML_API html_encode_omsg_app_msg(void *data, size_t size,
                                       size_t content_length);
+
+/**
+ * Encode a close message
+ * @param[in] data Points to a buffer of size @a size bytes
+ * @param[in] size The size of the buffer pointed to by @a data
+ * message to be sent
+ * @return The size in bytes of the encoded message, -1 on failure
+ */
+int HTML_API html_encode_omsg_close(void *data, size_t size);
 
 /**
  * Encode a form submission. This is useful for server implementations.

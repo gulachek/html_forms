@@ -138,6 +138,13 @@ void html_disconnect(html_connection *con) {
   if (!con)
     return;
 
+  uint8_t buf[HTML_MSG_SIZE];
+  int n = html_encode_omsg_close(buf, sizeof(buf));
+  if (n >= 0) {
+    msgstream_fd_send(con->fd, buf, sizeof(buf), n);
+  }
+
+  close(con->fd);
   free(con);
 }
 
@@ -377,6 +384,21 @@ int html_encode_omsg_navigate(void *data, size_t size, const char *url) {
   return strlen(data);
 }
 
+int html_encode_omsg_close(void *data, size_t size) {
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return -1;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_CLOSE))
+    return -1;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return -1;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
 int html_navigate(html_connection *con, const char *url) {
   if (!con)
     return 0;
@@ -594,6 +616,9 @@ int html_decode_out_msg(const void *data, size_t size,
     msg->type = HTML_OMSG_MIME_MAP;
     msg->msg.mime = html_mime_map_create();
     ret = html_decode_mime_msg(obj, msg->msg.mime);
+  } else if (type_val == HTML_OMSG_CLOSE) {
+    msg->type = HTML_OMSG_CLOSE;
+    ret = 1;
   } else {
     goto fail;
   }
