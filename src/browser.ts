@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { recv, send } from './MsgStream';
 
 const BUF_SIZE = 2048;
@@ -16,7 +16,13 @@ interface CloseMessage {
 	windowId: number;
 }
 
-type OutputMessage = OpenMessage | CloseMessage;
+interface ErrorMessage {
+	type: 'error';
+	windowId: number;
+	msg: string;
+}
+
+type OutputMessage = OpenMessage | CloseMessage | ErrorMessage;
 type InputMessage = CloseMessage;
 
 async function sendMsg(msg: InputMessage) {
@@ -28,6 +34,7 @@ function makeWindow(windowId: number): BrowserWindow {
 	const win = new BrowserWindow();
 
 	win.on('close', (e) => {
+		if (!windows.has(windowId)) return;
 		e.preventDefault(); // let app do closing
 		sendMsg({ type: 'close', windowId });
 	});
@@ -89,6 +96,15 @@ app.whenReady().then(async () => {
 			const win = windows.get(windowId);
 			if (!win) return;
 			win.destroy();
+			windows.delete(windowId);
+		} else if (jobj.type === 'error') {
+			const { windowId, msg } = jobj;
+			const win = windows.get(windowId);
+			if (!win) return;
+			dialog.showMessageBox(win, {
+				type: 'error',
+				message: msg,
+			});
 			windows.delete(windowId);
 		}
 	}

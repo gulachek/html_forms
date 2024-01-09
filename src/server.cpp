@@ -41,6 +41,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::string ws_send_buf_;
   browser &browser_;
   browser::window_id window_id_;
+  bool gracefully_closed_ = false;
 
   std::map<std::string, std::string> mime_overrides_;
   boost::uuids::name_generator_sha1 name_gen_{boost::uuids::ns::url()};
@@ -64,7 +65,14 @@ public:
 
   ~catui_connection() {
     http_->remove_session(session_id_);
-    browser_.release_window(window_id_);
+
+    if (gracefully_closed_)
+      browser_.release_window(window_id_);
+    else
+      browser_.show_error(
+          window_id_, "Session terminated. This is likely due to poor "
+                      "connection quality, killing a process, or a software "
+                      "bug.");
 
     std::filesystem::remove_all(docroot_);
   }
@@ -193,6 +201,7 @@ private:
 
   void do_close() {
     std::cerr << '[' << session_id_ << "] CLOSE" << std::endl;
+    gracefully_closed_ = true;
     end_catui();
   }
 

@@ -24,6 +24,7 @@ int main() {
   const char *render_path = tmpnam(NULL);
   int ret = loop(db, con, render_path);
 
+  html_disconnect(con);
   sqlite3_close(db);
   remove(render_path);
   return ret;

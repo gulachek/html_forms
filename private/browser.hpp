@@ -24,6 +24,7 @@ public:
   void run();
   window_id reserve_window(const std::weak_ptr<window_watcher> &watcher);
   void release_window(window_id window);
+  void show_error(window_id window, const std::string &msg);
 
   void async_load_url(window_id window, const std::string_view &url,
                       const std::function<load_url_handler> &cb);

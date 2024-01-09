@@ -14,24 +14,29 @@ int main() {
   }
 
   if (!override_mimes(con))
-    return 1;
+    goto fail;
 
   if (!html_upload_dir(con, "/", "./example/mime_swap/docroot")) {
     fprintf(stderr, "Failed to upload docroot: %s\n", html_errmsg(con));
-    return 1;
+    goto fail;
   }
 
   if (!html_navigate(con, "/markup.css")) {
     fprintf(stderr, "Failed to navigate to /markup.css: %s\n",
             html_errmsg(con));
-    return 1;
+    goto fail;
   }
 
   html_form *form;
   if (html_read_form(con, &form) == HTML_OK)
     html_form_free(form);
 
+  html_disconnect(con);
   return 0;
+
+fail:
+  html_disconnect(con);
+  return 1;
 }
 
 int override_mimes(html_connection *con) {

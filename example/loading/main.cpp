@@ -8,13 +8,7 @@
 
 using std::chrono::milliseconds;
 
-int main(int argc, char **argv) {
-  html_connection *con;
-  if (!html_connect(&con)) {
-    std::cerr << "Failed to connect: " << html_errmsg(con) << std::endl;
-    return 1;
-  }
-
+int app_main(html_connection *con) {
   if (!html_upload_dir(con, "/", DOCROOT_PATH)) {
     std::cerr << "Failed to upload docroot: " << html_errmsg(con) << std::endl;
     return 1;
@@ -55,4 +49,17 @@ int main(int argc, char **argv) {
   }
 
   return 1;
+}
+
+int main(int argc, char **argv) {
+  html_connection *con;
+  if (!html_connect(&con)) {
+    std::cerr << "Failed to connect: " << html_errmsg(con) << std::endl;
+    return 1;
+  }
+
+  int ret = app_main(con);
+
+  html_disconnect(con);
+  return ret;
 }

@@ -78,6 +78,19 @@ void browser::release_window(window_id window) {
   async_close_window(window, [](std::error_condition) {});
 }
 
+void browser::show_error(window_id window, const std::string &msg) {
+  if (!proc_)
+    return;
+
+  mtx_.async_lock([this, window, msg](lock_ptr lock) {
+    json::object obj;
+    obj["type"] = "error";
+    obj["windowId"] = window;
+    obj["msg"] = msg;
+    send_msg(obj, [](std::error_condition ec, std::size_t n) {});
+  });
+}
+
 void browser::send_msg(
     const json::object &obj,
     const std::function<void(std::error_condition, std::size_t)> &cb) {
