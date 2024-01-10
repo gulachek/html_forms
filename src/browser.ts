@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, screen } from 'electron';
 import { recv, send } from './MsgStream';
 
 const BUF_SIZE = 2048;
@@ -31,8 +31,27 @@ async function sendMsg(msg: InputMessage) {
 }
 
 function makeWindow(windowId: number): BrowserWindow {
-	const win = new BrowserWindow();
+	const win = new BrowserWindow({ show: false });
 
+	const centerAndShowWindow = () => {
+		const { width, height, x, y } = win.getContentBounds();
+		const mid = {
+			x: Math.floor(x + width / 2),
+			y: Math.floor(y + height / 2),
+		};
+		const display = screen.getDisplayNearestPoint(mid);
+		const sz = display.workAreaSize;
+		const margin = 64;
+		win.setSize(
+			Math.max(sz.width - 2 * margin, 800),
+			Math.max(sz.height - 2 * margin, 800),
+		);
+		win.center();
+		win.show();
+		win.off('ready-to-show', centerAndShowWindow);
+	};
+
+	win.on('ready-to-show', centerAndShowWindow);
 	win.on('close', (e) => {
 		if (!windows.has(windowId)) return;
 		e.preventDefault(); // let app do closing
