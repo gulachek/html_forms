@@ -31,14 +31,34 @@ int main() {
 }
 
 void print_header(FILE *f) {
-  fprintf(f, "<!DOCTYPE html>"
-             "<html>"
-             "<head>"
-             "<title> Todo Items </title>"
-             "<script src=\"/html/forms.js\"></script>"
-             "<link rel=\"stylesheet\" href=\"~/main.css\" />"
-             "</head>"
-             "<body>");
+  fprintf(
+      f,
+      "<!DOCTYPE html>"
+      "<html>"
+      "<head>"
+      "<title> Todo Items </title>"
+      "<script src=\"/html/forms.js\"></script>"
+      "<link rel=\"stylesheet\" href=\"~/main.css\" />"
+      "</head>"
+      "<body>"
+      "<svg class=\"svg-defs\">"
+      /*<!--!Font Awesome Free 6.5.1 by @fontawesome - https : //
+         fontawesome.com License - https://fontawesome.com/license/free
+         // Copyright 2023 Fonticons, Inc.-->*/
+      "<def>"
+      "<path id=\"icon-normal\" d=\"M256 512A256 256 0 1 0 256 0a256 256 0 1 "
+      "0 0 512z\" />"
+      "<path id=\"icon-important\" d=\"M256 512A256 256 0 1 0 256 0a256 256 0 "
+      "1 0 0 512zm0-384c13.3 0 24 10.7 24 24V264c0 13.3-10.7 24-24 "
+      "24s-24-10.7-24-24V152c0-13.3 10.7-24 24-24zM224 352a32 32 0 1 1 64 0 32 "
+      "32 0 1 1 -64 0z\"/>"
+      "<path id=\"icon-lower\" d=\"M256 0a256 256 0 1 0 0 512A256 256 0 1 0 "
+      "256 0zM376.9 294.6L269.8 394.5c-3.8 3.5-8.7 5.5-13.8 "
+      "5.5s-10.1-2-13.8-5.5L135.1 294.6c-4.5-4.2-7.1-10.1-7.1-16.3c0-12.3 "
+      "10-22.3 22.3-22.3l57.7 0 0-96c0-17.7 14.3-32 32-32l32 0c17.7 0 32 14.3 "
+      "32 32l0 96 57.7 0c12.3 0 22.3 10 22.3 22.3c0 6.2-2.6 12.1-7.1 16.3z\"/>"
+      "</def>"
+      "</svg>");
 }
 
 void print_footer(FILE *f) { fprintf(f, "</body></html>"); }
@@ -90,14 +110,14 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
     const char *date_class =
         (due_date && strlen((const char *)due_date) > 0) ? "" : " empty";
 
-    const char *bullet_img = "~/icons/normal.svg";
+    const char *bullet_href = "icon-normal";
 
     switch (priority) {
     case 0:
-      bullet_img = "~/icons/lower.svg";
+      bullet_href = "icon-lower";
       break;
     case 2:
-      bullet_img = "~/icons/important.svg";
+      bullet_href = "icon-important";
       break;
     default:
       break;
@@ -107,14 +127,15 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
             "<li>"
             "<form class=\"todo-line\">"
             "<input type=\"hidden\" name=\"id\" value=\"%d\" />"
-            "<img class=\"todo-bullet\" src=\"%s\"></img>"
+            "<svg viewBox=\"0 0 512 512\" width=\"16\" height=\"16\"><use "
+            "href=\"#%s\" /></svg>"
             "<span class=\"title\"> %s </span>"
             "<span class=\"due-date%s\"> (%s) </span>"
             "<button name=\"action\" value=\"edit\"> Edit </button>"
             "<button name=\"action\" value=\"delete\"> Done </button>"
             "</form>"
             "</li>",
-            id, bullet_img, esc_title, date_class, esc_date);
+            id, bullet_href, esc_title, date_class, esc_date);
   }
 
   int ec = sqlite3_finalize(select);

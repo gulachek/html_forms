@@ -1,5 +1,31 @@
-html {
+:root {
 	font-family: sans-serif;
+	--important-fill: red;
+	--lower-fill: blue;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+		--important-fill: salmon;
+		--lower-fill: lightblue;
+	}
+}
+
+.svg-defs {
+	display: none;
+}
+
+.svg-defs #icon-normal {
+	fill: CanvasText;
+}
+
+.svg-defs #icon-important {
+	fill: var(--important-fill);
+}
+
+.svg-defs #icon-lower {
+	fill: var(--lower-fill);
 }
 
 .todo-items {
