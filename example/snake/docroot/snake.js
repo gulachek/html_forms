@@ -1,4 +1,5 @@
 let ws;
+let fps;
 
 const keyMap = {
 	h: 'left',
@@ -25,9 +26,53 @@ function onKeyDown(key) {
 let lastMsg;
 const GAME_WIDTH = 40;
 const GAME_HEIGHT = 30;
+const FPS_NFRAMES = 10;
+
+class FrameRate {
+	times;
+	index;
+	elem;
+	fmt;
+
+	constructor(elem) {
+		this.elem = elem;
+		this.times = [];
+		this.index = 0;
+		for (let i = 0; i < FPS_NFRAMES; ++i) {
+			this.times.push(performance.now());
+		}
+
+		this.fmt = new Intl.NumberFormat('en-US', {
+			maximumFractionDigits: 2,
+			minimumFractionDigits: 2,
+			minimumIntegerDigits: 2,
+		});
+	}
+
+	update() {
+		const now = performance.now();
+		this.times[this.index] = now;
+		this.index = (this.index + 1) % this.times.length;
+
+		// render on each cycle
+		if (this.index == 0) {
+			this.elem.innerText = this.fps();
+		}
+	}
+
+	fps() {
+		let sumDiffsMs = 0;
+		const diffCount = this.times.length - 1;
+		for (let i = 0; i < diffCount; ++i)
+			sumDiffsMs += this.times[i + 1] - this.times[i];
+
+		const fpsStr = this.fmt.format((diffCount * 1000) / sumDiffsMs);
+		return `${fpsStr} fps`;
+	}
+}
 
 function resizeCanvas(canvas) {
-	const { clientWidth, clientHeight } = document.documentElement;
+	const { clientWidth, clientHeight } = canvas.parentElement;
 	const pxPerUnitX = Math.max(Math.floor(clientWidth / GAME_WIDTH), 3);
 	const pxPerUnitY = Math.max(Math.floor(clientHeight / GAME_HEIGHT), 3);
 	const pxPerUnit = Math.min(pxPerUnitX, pxPerUnitY);
@@ -60,12 +105,17 @@ function render(canvas, ctx) {
 	const [sx, sy] = lastMsg.fruit;
 	ctx.fillStyle = 'rgb(255, 200, 0)';
 	ctx.fillRect(sx * unitX, sy * unitY, unitX, unitY);
+
+	// compute fps
+	fps.update();
 }
 
 async function main() {
 	const canvas = document.getElementById('canvas');
 	const ctx = canvas.getContext('2d');
 	resizeCanvas(canvas);
+
+	fps = new FrameRate(document.getElementById('frame-rate'));
 
 	ws = HtmlForms.connect();
 
