@@ -17,16 +17,6 @@
 extern "C" {
 #endif
 
-/**
- * Error codes returned by the library.
- */
-enum html_error_code {
-  HTML_OK = 0,    /**< No error */
-  HTML_ERROR = 1, /**< Error occurred */
-  HTML_CLOSE_REQ =
-      2, /**< A close was requested while an operation was in progress */
-};
-
 /** @cond PRIVATE */
 struct html_mime_map_;
 struct html_connection_;
@@ -89,6 +79,26 @@ int HTML_API html_connect(html_connection **pcon);
  * @param[in] con The connection to be disconnected
  */
 void HTML_API html_disconnect(html_connection *con);
+
+/**
+ * Check to see if a close was requested on the connection
+ * @param[in] con The connection
+ * @return 1 if a close is requested, 0 otherwise
+ * @remark Once a close is requested, this function will return 1 until @ref
+ * html_reject_close is called on the connection. To accept the close request,
+ * call @ref html_disconnect.
+ */
+int HTML_API html_close_requested(const html_connection *con);
+
+/**
+ * Reject a requested close
+ * @param[in] con The connection
+ * @remark This function does not communicate with the server. It only cleans up
+ * state to track that a close request was handled and rejected so that
+ * subsequent requests can be handled appropriately. To accept a close request
+ * instead, call @ref html_disconnect.
+ */
+void HTML_API html_reject_close(html_connection *con);
 
 /**
  * Retreive the last error message associated with the connection
@@ -214,20 +224,19 @@ int HTML_API html_send(html_connection *con, const void *data, size_t size);
  * @param[in] data Pointer to a buffer of size @a size bytes
  * @param[in] size Size in bytes of buffer pointed to by @a data
  * @param[out] msg_size Size in bytes of message received
- * @return Error code
+ * @return 1 if an app message was read, 0 otherwise
  */
-enum html_error_code HTML_API html_recv(html_connection *con, void *data,
-                                        size_t size, size_t *msg_size);
+int HTML_API html_recv(html_connection *con, void *data, size_t size,
+                       size_t *msg_size);
 
 /**
  * Read an `application/x-www-form-urlencoded` form
  * @param[in] con The connection to read from
  * @param[out] pform Pointer to form pointer
- * @return HTML_OK when a form is read, other status otherwise
+ * @return 1 if a form was read, 0 otherwise
  * @remark The caller is responsible to free the form with html_form_free()
  */
-enum html_error_code HTML_API html_read_form(html_connection *con,
-                                             html_form **pform);
+int HTML_API html_form_read(html_connection *con, html_form **pform);
 
 /**
  * Free a form object

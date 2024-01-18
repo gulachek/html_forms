@@ -161,7 +161,7 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
   }
 
   html_form_free(*pform);
-  if (html_read_form(con, pform)) {
+  if (!html_form_read(con, pform)) {
     fprintf(stderr, "Failed to read form: %s\n", html_errmsg(con));
     goto fail;
   }
@@ -293,7 +293,7 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
   }
 
   html_form_free(*pform);
-  if (html_read_form(con, pform)) {
+  if (!html_form_read(con, pform)) {
     fprintf(stderr, "Failed to read form: %s\n", html_errmsg(con));
     goto fail;
   }

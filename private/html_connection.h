@@ -5,6 +5,7 @@
 
 struct html_connection_ {
   int fd;
+  int close_requested;
   char errbuf[512];
 };
 

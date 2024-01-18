@@ -158,7 +158,7 @@ int HTML_API html_decode_out_msg(const void *data, size_t size,
  * encoded message
  * @return 1 on success, 0 on failure
  * @remark It's unlikely that you should use this. You should look at more
- * specific APIs like @ref html_read_form
+ * specific APIs like @ref html_form_read
  * @remark See @ref html_in_msg for specifics on messages and if resources need
  * to be released to avoid memory leaks.
  */

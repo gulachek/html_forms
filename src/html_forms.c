@@ -108,6 +108,8 @@ int html_connect(html_connection **pcon) {
   if (!con)
     goto fail;
 
+  con->close_requested = 0;
+
   FILE *f = tmpfile();
   if (!f) {
     printf_err(con, "Failed to create tmpfile for catui");
@@ -146,6 +148,18 @@ void html_disconnect(html_connection *con) {
 
   close(con->fd);
   free(con);
+}
+
+int html_close_requested(const html_connection *con) {
+  if (!con)
+    return 0;
+  return con->close_requested;
+}
+
+void html_reject_close(html_connection *con) {
+  if (!con)
+    return;
+  con->close_requested = 1;
 }
 
 const char *html_errmsg(html_connection *con) {
@@ -771,23 +785,24 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
   if (ec) {
     printf_err(con, "Failed to receive input message: %s",
                msgstream_errstr(ec));
-    return HTML_ERROR;
+    return 0;
   }
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg)) {
     printf_err(con, "Failed to parse input message");
-    return HTML_ERROR;
+    return 0;
   }
 
   if (msg.type != HTML_IMSG_FORM) {
     if (msg.type == HTML_IMSG_CLOSE_REQ) {
       printf_err(con, "Close requested by user");
-      return HTML_CLOSE_REQ;
+      con->close_requested = 1;
     } else {
       printf_err(con, "Unexpected message type: %d", msg.type);
-      return HTML_ERROR;
     }
+
+    return 0;
   }
 
   const char *x_www_form_urlencoded = "application/x-www-form-urlencoded";
@@ -795,7 +810,7 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
   if (strcmp(form->mime_type, x_www_form_urlencoded) != 0) {
     printf_err(con, "Unexpected form mime type '%s' (expected '%s')",
                form->mime_type, x_www_form_urlencoded);
-    return HTML_ERROR;
+    return 0;
   }
 
   if (form->content_length + 1 > size) {
@@ -803,7 +818,7 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
                "Form buffer of size %lu is too small for received form of size "
                "%lu (plus null terminator)",
                size, form->content_length);
-    return HTML_ERROR;
+    return 0;
   }
 
   int nread = 0;
@@ -811,7 +826,7 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
     ssize_t ret = read(con->fd, data + nread, form->content_length - nread);
     if (ret < 1) {
       printf_err(con, "read() failed: %s", strerror(errno));
-      return HTML_ERROR;
+      return 0;
     }
 
     nread += ret;
@@ -820,17 +835,16 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
   ((char *)data)[nread] = '\0';
 
   *pnread = nread;
-  return HTML_OK;
+  return 1;
 }
 
-enum html_error_code html_recv(html_connection *con, void *data, size_t size,
-                               size_t *msg_size) {
+int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
   if (!con)
-    return HTML_ERROR;
+    return 0;
 
   if (!msg_size) {
     printf_err(con, "null 'msg_size' argument");
-    return HTML_ERROR;
+    return 0;
   }
 
   int fd = con->fd;
@@ -840,23 +854,24 @@ enum html_error_code html_recv(html_connection *con, void *data, size_t size,
   int ec = msgstream_fd_recv(fd, buf, sizeof(buf), &n);
   if (ec) {
     printf_err(con, "Failed to receive app message: %s", msgstream_errstr(ec));
-    return HTML_ERROR;
+    return 0;
   }
 
   struct html_in_msg msg;
   if (!html_decode_in_msg(buf, n, &msg)) {
     printf_err(con, "Failed to parse input message");
-    return HTML_ERROR;
+    return 0;
   }
 
   if (msg.type != HTML_IMSG_APP_MSG) {
     if (msg.type == HTML_IMSG_CLOSE_REQ) {
       printf_err(con, "Close requested by user");
-      return HTML_CLOSE_REQ;
+      con->close_requested = 1;
     } else {
       printf_err(con, "Unexpected message type: %d", msg.type);
-      return HTML_ERROR;
     }
+
+    return 0;
   }
 
   struct html_imsg_app_msg *app_msg = &msg.msg.app_msg;
@@ -866,7 +881,7 @@ enum html_error_code html_recv(html_connection *con, void *data, size_t size,
                "size %lu (and a "
                "null terminator)",
                size, app_msg->content_length);
-    return HTML_ERROR;
+    return 0;
   }
 
   // TODO - factor out readn
@@ -874,13 +889,13 @@ enum html_error_code html_recv(html_connection *con, void *data, size_t size,
   while (nread < app_msg->content_length) {
     ssize_t ret = read(fd, data + nread, app_msg->content_length - nread);
     if (ret < 1)
-      return HTML_ERROR;
+      return 0;
 
     nread += ret;
   }
 
   *msg_size = app_msg->content_length;
-  return HTML_OK;
+  return 1;
 }
 
 struct html_form_field {
@@ -991,22 +1006,19 @@ static int parse_field(char *buf, size_t size, int offset,
   return field_size;
 }
 
-enum html_error_code html_read_form(html_connection *con, html_form **pform) {
+int html_form_read(html_connection *con, html_form **pform) {
   if (!con)
-    return HTML_ERROR;
+    return 0;
 
   if (!pform) {
     printf_err(con, "null 'pform' argument");
-    return HTML_ERROR;
+    return 0;
   }
 
   char buf[HTML_FORM_SIZE];
   size_t n;
-  int ec = html_read_form_data(con, buf, sizeof(buf), &n);
-  if (ec != HTML_OK) {
-    // error message handled in html_read_form_data
-    return ec;
-  }
+  if (!html_read_form_data(con, buf, sizeof(buf), &n))
+    return 0;
 
   int nfields = n > 0 ? 1 : 0;
   for (int i = 0; i < n; ++i) {
@@ -1017,14 +1029,14 @@ enum html_error_code html_read_form(html_connection *con, html_form **pform) {
   html_form *form;
   if ((form = malloc(sizeof(html_form))) == NULL) {
     printf_err(con, "Failed to allocate html_form struct");
-    return HTML_ERROR;
+    return 0;
   }
 
   form->size = nfields;
   if ((form->fields = calloc(nfields, sizeof(struct html_form_field))) ==
       NULL) {
     printf_err(con, "Failed to allocate form for %d fields", nfields);
-    return HTML_ERROR;
+    return 0;
   }
 
   int i = 0;
@@ -1035,14 +1047,14 @@ enum html_error_code html_read_form(html_connection *con, html_form **pform) {
                  "Failed to parse form field %d in '%s' (starting "
                  "at '%5s')",
                  field_i, buf, &buf[i]);
-      return HTML_ERROR;
+      return 0;
     }
 
     i += field_size + 1; // magic 1 for '&'
   }
 
   *pform = form;
-  return HTML_OK;
+  return 1;
 }
 
 void html_form_free(html_form *form) {

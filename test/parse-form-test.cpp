@@ -45,8 +45,8 @@ struct f {
 
   int recv(const std::string_view &sv) {
     send(sv);
-    int ret = html_read_form(con_, &form_);
-    if (ret != HTML_OK)
+    int ret = html_form_read(con_, &form_);
+    if (!ret)
       BOOST_FAIL("Failed to read form");
 
     // Check consistency of object
@@ -64,8 +64,8 @@ struct f {
 
   void fail(const std::string_view &sv) {
     send(sv);
-    int ret = html_read_form(con_, &form_);
-    BOOST_TEST(ret == HTML_ERROR);
+    int ret = html_form_read(con_, &form_);
+    BOOST_TEST(!ret);
   }
 
   void chksz(std::size_t expected_size) {

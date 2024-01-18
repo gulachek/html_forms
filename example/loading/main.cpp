@@ -21,9 +21,8 @@ int app_main(html_connection *con) {
     }
 
     html_form *form;
-    auto ec = html_read_form(con, &form);
-    if (ec) {
-      if (ec == HTML_CLOSE_REQ) {
+    if (!html_form_read(con, &form)) {
+      if (html_close_requested(con)) {
         return 0;
       } else {
         std::cerr << "Failed to read form: " << html_errmsg(con) << std::endl;

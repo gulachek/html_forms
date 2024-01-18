@@ -28,9 +28,8 @@ int main() {
   }
 
   html_form *form;
-  if (html_read_form(con, &form) == HTML_OK)
+  if (html_form_read(con, &form))
     html_form_free(form);
-
   html_disconnect(con);
   return 0;
 
