@@ -45,6 +45,7 @@ enum html_in_msg_type {
   HTML_IMSG_FORM = 0,      /**< Form submission */
   HTML_IMSG_APP_MSG = 1,   /**< Application-defined message */
   HTML_IMSG_CLOSE_REQ = 2, /**< Request to close application */
+  HTML_IMSG_ERROR = 3,     /**< Server reported error */
 };
 
 /** Output message types */
@@ -120,6 +121,12 @@ struct html_imsg_app_msg {
   size_t content_length;
 };
 
+/** Server reported fatal error */
+struct html_imsg_error {
+  /** null-terminated message sent from server */
+  char msg[HTML_MSG_SIZE];
+};
+
 /**
  * An input message from the user. Client libraries can use this to decode
  * messages and implement abstractions.
@@ -133,6 +140,8 @@ struct html_in_msg {
     struct html_imsg_form form;
     /** Application-defined message */
     struct html_imsg_app_msg app_msg;
+    /** Fatal error reported by server */
+    struct html_imsg_error error;
   } msg;
 };
 
@@ -250,6 +259,15 @@ int HTML_API html_encode_imsg_app_msg(void *data, size_t size,
  * @return The size in bytes of the encoded message or -1 on failure
  */
 int HTML_API html_encode_imsg_close_req(void *data, size_t size);
+
+/**
+ * Encode a server-sent fatal error message
+ * @param[in] str Pointer to buffer to hold encoded message
+ * @param[in] size Size in bytes of buffer pointed to by @a data
+ * @param[in] msg Null terminated string holding error message
+ * @return The size in bytes of the encoded message or -1 on failure
+ */
+int HTML_API html_encode_imsg_error(void *data, size_t size, const char *msg);
 
 #ifdef __cplusplus
 }

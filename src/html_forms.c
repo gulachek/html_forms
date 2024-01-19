@@ -670,6 +670,26 @@ int html_encode_imsg_form(void *data, size_t size, size_t content_length,
   return strlen(data);
 }
 
+int html_encode_imsg_error(void *data, size_t size, const char *msg) {
+  // msg: string
+
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return -1;
+
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_IMSG_ERROR))
+    return -1;
+
+  if (!cJSON_AddStringToObject(obj, "msg", msg))
+    return -1;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    return -1;
+
+  cJSON_Delete(obj);
+  return strlen(data);
+}
+
 static int html_decode_submit_form_msg(cJSON *obj, struct html_imsg_form *msg) {
   // mime: string
   // size: number
@@ -684,6 +704,14 @@ static int html_decode_submit_form_msg(cJSON *obj, struct html_imsg_form *msg) {
     return 0;
   msg->content_length = (size_t)size_val;
   if (msg->content_length != size_val)
+    return 0;
+
+  return 1;
+}
+
+static int html_decode_error(cJSON *obj, struct html_imsg_error *msg) {
+  // msg: string
+  if (!copy_string(obj, "msg", msg->msg, sizeof(msg->msg)))
     return 0;
 
   return 1;
@@ -765,6 +793,9 @@ int html_decode_in_msg(const void *data, size_t size, struct html_in_msg *msg) {
   } else if (type_val == HTML_IMSG_CLOSE_REQ) {
     msg->type = HTML_IMSG_CLOSE_REQ;
     ret = 1;
+  } else if (type_val == HTML_IMSG_ERROR) {
+    msg->type = HTML_IMSG_ERROR;
+    ret = html_decode_error(obj, &msg->msg.error);
   } else {
     goto fail;
   }
@@ -797,6 +828,8 @@ static int read_msg_type(html_connection *con, struct html_in_msg *msg,
     if (msg->type == HTML_IMSG_CLOSE_REQ) {
       printf_err(con, "Close requested by user");
       con->close_requested = 1;
+    } else if (msg->type == HTML_IMSG_ERROR) {
+      printf_err(con, "(server): %s", msg->msg.error.msg);
     } else {
       printf_err(con, "Unexpected message type: %d", msg->type);
     }

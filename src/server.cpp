@@ -386,6 +386,24 @@ private:
     }
   }
 
+  void fatal_error(const std::string &msg) {
+    std::shared_ptr<std::string> err_buf = std::make_shared<std::string>();
+    err_buf->resize(HTML_MSG_SIZE);
+
+    if (html_encode_imsg_error(err_buf->data(), err_buf->size(), msg.c_str()) <
+        0)
+      return;
+
+    auto buf = asio::buffer(*err_buf);
+    my::async_msgstream_send(stream_, buf, err_buf->size(),
+                             bind(&self::on_send_err, err_buf));
+  }
+
+  void on_send_err(std::shared_ptr<std::string> err_buf,
+                   const std::error_condition &ec, std::size_t n) {
+    end_catui();
+  }
+
   void submit_post(std::shared_ptr<std::string> body) {
     std::cerr << "Posting body: " << *body << std::endl;
     auto buf = asio::buffer(submit_buf_.data(), HTML_MSG_SIZE);
