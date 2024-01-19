@@ -777,8 +777,8 @@ fail:
   return 0;
 }
 
-static int html_read_form_data(html_connection *con, void *data, size_t size,
-                               size_t *pnread) {
+static int read_msg_type(html_connection *con, struct html_in_msg *msg,
+                         int msg_type) {
   uint8_t buf[HTML_MSG_SIZE];
   size_t n;
   int ec = msgstream_fd_recv(con->fd, buf, sizeof(buf), &n);
@@ -788,22 +788,30 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
     return 0;
   }
 
-  struct html_in_msg msg;
-  if (!html_decode_in_msg(buf, n, &msg)) {
+  if (!html_decode_in_msg(buf, n, msg)) {
     printf_err(con, "Failed to parse input message");
     return 0;
   }
 
-  if (msg.type != HTML_IMSG_FORM) {
-    if (msg.type == HTML_IMSG_CLOSE_REQ) {
+  if (msg->type != msg_type) {
+    if (msg->type == HTML_IMSG_CLOSE_REQ) {
       printf_err(con, "Close requested by user");
       con->close_requested = 1;
     } else {
-      printf_err(con, "Unexpected message type: %d", msg.type);
+      printf_err(con, "Unexpected message type: %d", msg->type);
     }
 
     return 0;
   }
+
+  return 1;
+}
+
+static int html_read_form_data(html_connection *con, void *data, size_t size,
+                               size_t *pnread) {
+  struct html_in_msg msg;
+  if (!read_msg_type(con, &msg, HTML_IMSG_FORM))
+    return 0;
 
   const char *x_www_form_urlencoded = "application/x-www-form-urlencoded";
   struct html_imsg_form *form = &msg.msg.form;
@@ -847,32 +855,9 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
     return 0;
   }
 
-  int fd = con->fd;
-  uint8_t buf[HTML_MSG_SIZE];
-  size_t n;
-
-  int ec = msgstream_fd_recv(fd, buf, sizeof(buf), &n);
-  if (ec) {
-    printf_err(con, "Failed to receive app message: %s", msgstream_errstr(ec));
-    return 0;
-  }
-
   struct html_in_msg msg;
-  if (!html_decode_in_msg(buf, n, &msg)) {
-    printf_err(con, "Failed to parse input message");
+  if (!read_msg_type(con, &msg, HTML_IMSG_APP_MSG))
     return 0;
-  }
-
-  if (msg.type != HTML_IMSG_APP_MSG) {
-    if (msg.type == HTML_IMSG_CLOSE_REQ) {
-      printf_err(con, "Close requested by user");
-      con->close_requested = 1;
-    } else {
-      printf_err(con, "Unexpected message type: %d", msg.type);
-    }
-
-    return 0;
-  }
 
   struct html_imsg_app_msg *app_msg = &msg.msg.app_msg;
   if (app_msg->content_length + 1 > size) {
@@ -887,7 +872,7 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
   // TODO - factor out readn
   int nread = 0;
   while (nread < app_msg->content_length) {
-    ssize_t ret = read(fd, data + nread, app_msg->content_length - nread);
+    ssize_t ret = read(con->fd, data + nread, app_msg->content_length - nread);
     if (ret < 1)
       return 0;
 
