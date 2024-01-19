@@ -807,6 +807,21 @@ static int read_msg_type(html_connection *con, struct html_in_msg *msg,
   return 1;
 }
 
+static int readn(html_connection *con, size_t n, void *data) {
+  size_t nread = 0;
+  while (nread < n) {
+    ssize_t ret = read(con->fd, data + nread, n - nread);
+    if (ret < 1) {
+      printf_err(con, "read() failed: %s", strerror(errno));
+      return 0;
+    }
+
+    nread += ret;
+  }
+
+  return 1;
+}
+
 static int html_read_form_data(html_connection *con, void *data, size_t size,
                                size_t *pnread) {
   struct html_in_msg msg;
@@ -829,20 +844,11 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
     return 0;
   }
 
-  int nread = 0;
-  while (nread < form->content_length) {
-    ssize_t ret = read(con->fd, data + nread, form->content_length - nread);
-    if (ret < 1) {
-      printf_err(con, "read() failed: %s", strerror(errno));
-      return 0;
-    }
+  if (!readn(con, form->content_length, data))
+    return 0;
 
-    nread += ret;
-  }
-
-  ((char *)data)[nread] = '\0';
-
-  *pnread = nread;
+  ((char *)data)[form->content_length] = '\0';
+  *pnread = form->content_length;
   return 1;
 }
 
@@ -868,15 +874,8 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
     return 0;
   }
 
-  // TODO - factor out readn
-  int nread = 0;
-  while (nread < app_msg->content_length) {
-    ssize_t ret = read(con->fd, data + nread, app_msg->content_length - nread);
-    if (ret < 1)
-      return 0;
-
-    nread += ret;
-  }
+  if (!readn(con, app_msg->content_length, data))
+    return 0;
 
   *msg_size = app_msg->content_length;
   return 1;
