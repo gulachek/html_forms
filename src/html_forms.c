@@ -860,11 +860,10 @@ int html_recv(html_connection *con, void *data, size_t size, size_t *msg_size) {
     return 0;
 
   struct html_imsg_app_msg *app_msg = &msg.msg.app_msg;
-  if (app_msg->content_length + 1 > size) {
+  if (app_msg->content_length > size) {
     printf_err(con,
                "Buffer of size %lu is too small for message of "
-               "size %lu (and a "
-               "null terminator)",
+               "size %lu",
                size, app_msg->content_length);
     return 0;
   }
