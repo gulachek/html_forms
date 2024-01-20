@@ -1,4 +1,5 @@
 #include "asio-pch.hpp"
+#include "boost/system/detail/errc.hpp"
 #include "browser.hpp"
 #include "html_forms.h"
 #include "html_forms/encoding.h"
@@ -75,13 +76,12 @@ public:
   ~catui_connection() {
     http_->remove_session(session_id_);
 
-    if (gracefully_closed_)
-      browser_.release_window(window_id_);
-    else
+    if (!gracefully_closed_) {
       browser_.show_error(
           window_id_, "Session terminated. This is likely due to poor "
                       "connection quality, killing a process, or a software "
                       "bug.");
+    }
 
     std::filesystem::remove_all(docroot_);
   }
@@ -212,6 +212,7 @@ private:
     std::cerr << '[' << session_id_ << "] CLOSE" << std::endl;
     gracefully_closed_ = true;
     end_catui();
+    browser_.release_window(window_id_);
   }
 
   void do_map_mimes(html_mime_map *mimes) {
@@ -238,8 +239,7 @@ private:
     int msg_size =
         html_encode_imsg_close_req(submit_buf_.data(), submit_buf_.size());
     if (msg_size < 0) {
-      std::cerr << "Failed to encode close msg" << std::endl;
-      return end_ws();
+      return fatal_error("Failed to encode close message");
     }
 
     my::async_msgstream_send(stream_, asio::buffer(submit_buf_), msg_size,
@@ -271,13 +271,7 @@ private:
     ws_ = nullptr;
   }
 
-  void end_catui() {
-    stream_.close();
-
-    if (ws_) {
-      ws_->close(beast::websocket::close_code::none);
-    }
-  }
+  void end_catui() { stream_.close(); }
 
   void do_ws_read() {
     if (!ws_) {
@@ -291,7 +285,7 @@ private:
 
   void on_ws_read(beast::error_code ec, std::size_t size) {
     if (ec) {
-      if (ec != beast::errc::operation_canceled) {
+      if (ec == beast::websocket::error::closed) {
         std::cerr << "Failed to read ws message for session " << session_id_
                   << ": " << ec.message() << std::endl;
       }
