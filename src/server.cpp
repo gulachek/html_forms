@@ -173,8 +173,7 @@ private:
 
     struct html_out_msg msg;
     if (!html_decode_out_msg(buf_.data(), n, &msg)) {
-      std::cerr << "Error decoding html message" << std::endl;
-      return;
+      return fatal_error("Invalid output message");
     }
 
     switch (msg.type) {
@@ -387,6 +386,8 @@ private:
   }
 
   void fatal_error(const std::string &msg) {
+    std::cerr << "Fatal error: " << msg << std::endl;
+
     std::shared_ptr<std::string> err_buf = std::make_shared<std::string>();
     err_buf->resize(HTML_MSG_SIZE);
 
