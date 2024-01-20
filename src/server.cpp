@@ -8,6 +8,7 @@
 #include "my-beast.hpp"
 #include "open-url.hpp"
 
+#include <algorithm>
 #include <archive.h>
 #include <archive_entry.h>
 #include <filesystem>
@@ -27,13 +28,21 @@ concept member_fn_of =
     std::is_member_function_pointer_v<Fn> &&
     requires(Fn fp, Class *inst) { std::bind_front(fp, inst); };
 
+struct read_upload_state {
+  std::filesystem::path path;
+  std::string url;
+  std::size_t nbytes_left;
+  std::ofstream of;
+  html_resource_type rtype;
+};
+
 class catui_connection : public std::enable_shared_from_this<catui_connection>,
                          public http_session,
                          public browser::window_watcher {
   using self = catui_connection;
 
   my::stream_descriptor stream_;
-  std::vector<std::uint8_t> buf_;
+  std::vector<std::uint8_t> output_msg_buf_;
   std::shared_ptr<http_listener> http_;
   std::string session_id_;
   std::vector<std::uint8_t> submit_buf_;
@@ -137,12 +146,13 @@ public:
 
 private:
   void do_ack() {
-    buf_.resize(CATUI_ACK_SIZE);
-    auto n = catui_server_encode_ack(buf_.data(), buf_.size(), stderr);
+    output_msg_buf_.resize(CATUI_ACK_SIZE);
+    auto n = catui_server_encode_ack(output_msg_buf_.data(),
+                                     output_msg_buf_.size(), stderr);
     if (n < 0)
       return;
 
-    my::async_msgstream_send(stream_, asio::buffer(buf_), n,
+    my::async_msgstream_send(stream_, asio::buffer(output_msg_buf_), n,
                              bind(&self::on_ack));
   }
 
@@ -152,14 +162,14 @@ private:
       return end_catui();
     }
 
-    buf_.resize(HTML_MSG_SIZE);
+    output_msg_buf_.resize(HTML_MSG_SIZE);
     do_recv();
   }
 
   void do_recv() {
     asio::dispatch([this] {
       stream_.get_executor(),
-          my::async_msgstream_recv(stream_, asio::buffer(buf_),
+          my::async_msgstream_recv(stream_, asio::buffer(output_msg_buf_),
                                    bind(&self::on_recv));
     });
   }
@@ -172,7 +182,7 @@ private:
     }
 
     struct html_out_msg msg;
-    if (!html_decode_out_msg(buf_.data(), n, &msg)) {
+    if (!html_decode_out_msg(output_msg_buf_.data(), n, &msg)) {
       return fatal_error("Invalid output message");
     }
 
@@ -527,93 +537,130 @@ private:
   }
 
   void do_read_upload(const html_omsg_upload &msg) {
-    auto contents = std::make_shared<std::string>();
-    contents->resize(msg.content_length);
     std::cerr << '[' << session_id_ << "] UPLOAD " << msg.url << std::endl;
 
-    my::async_readn(stream_, asio::buffer(*contents), msg.content_length,
-                    bind(&self::on_read_upload, msg.rtype,
-                         std::make_shared<std::string>(msg.url), contents));
+    auto state = std::make_shared<read_upload_state>();
+    state->path = upload_path(msg.url);
+
+    switch (msg.rtype) {
+    case HTML_RT_ARCHIVE:
+      state->path += ".archive";
+      break;
+    case HTML_RT_FILE:
+      // nothing to do
+      break;
+    default:
+      return fatal_error("Invalid resource type");
+    }
+
+    state->rtype = msg.rtype;
+    state->url = msg.url;
+    state->of.open(state->path);
+
+    if (!state->of)
+      return fatal_error("Error opening file for upload");
+
+    state->nbytes_left = msg.content_length;
+    read_upload_chunk(state);
   }
 
-  void on_read_upload(html_resource_type rtype,
-                      std::shared_ptr<std::string> url,
-                      std::shared_ptr<std::string> contents, std::error_code ec,
-                      std::size_t n) {
+  void read_upload_chunk(std::shared_ptr<read_upload_state> state) {
+    std::size_t n = std::min(state->nbytes_left, output_msg_buf_.size());
+
+    my::async_readn(stream_, asio::buffer(output_msg_buf_), n,
+                    bind(&self::on_read_upload_chunk, state));
+  }
+
+  void on_read_upload_chunk(std::shared_ptr<read_upload_state> state,
+                            std::error_code ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Error reading upload: " << ec.message() << std::endl;
-      return end_catui();
+      return fatal_error(ec.message());
     }
 
-    if (rtype == HTML_RT_ARCHIVE) {
-      struct archive *a;
-      a = archive_read_new();
-      archive_read_support_filter_all(a);
-      archive_read_support_format_all(a);
-      int r = archive_read_open_memory(a, contents->data(), contents->size());
-      if (r != ARCHIVE_OK) {
-        std::cerr << "Failed to open archive " << archive_error_string(a)
-                  << std::endl;
-        return end_catui(); // fatal
+    try {
+      state->of.write((const char *)output_msg_buf_.data(), n);
+    } catch (const std::exception &ex) {
+      return fatal_error(ex.what());
+    }
+
+    state->nbytes_left -= n;
+    if (state->nbytes_left > 0) {
+      read_upload_chunk(state);
+    } else {
+      state->of.close();
+      switch (state->rtype) {
+      case HTML_RT_ARCHIVE:
+        on_read_archive(state);
+        break;
+      case HTML_RT_FILE:
+        // nothing to do :)
+        break;
+      default:
+        break;
       }
 
-      struct archive_entry *entry;
-      while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
-        mode_t type = archive_entry_filetype(entry);
-        if (type != AE_IFREG) // only upload regular files
-          continue;
+      do_recv();
+    }
+  }
 
-        std::ostringstream cat_url_ss;
-        cat_url_ss << *url;
+  void on_read_archive(const std::shared_ptr<read_upload_state> &state) {
+    struct archive *a;
+    a = archive_read_new();
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    int r = archive_read_open_filename(a, state->path.c_str(), 10240);
+    if (r != ARCHIVE_OK) {
+      std::cerr << "Failed to open archive " << archive_error_string(a)
+                << std::endl;
+      return end_catui(); // fatal
+    }
 
-        std::string_view entry_pathname{archive_entry_pathname(entry)};
+    struct archive_entry *entry;
+    while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+      mode_t type = archive_entry_filetype(entry);
+      if (type != AE_IFREG) // only upload regular files
+        continue;
 
-        if (!(url->ends_with('/') || entry_pathname.starts_with('/')))
-          cat_url_ss << '/';
+      std::ostringstream cat_url_ss;
+      cat_url_ss << state->url;
 
-        cat_url_ss << entry_pathname;
-        auto cat_url = cat_url_ss.str();
-        std::cerr << '[' << session_id_ << "] UPLOAD-ENTRY " << cat_url
-                  << std::endl;
+      std::string_view entry_pathname{archive_entry_pathname(entry)};
 
-        auto path = upload_path(cat_url);
-        std::ofstream of{path};
+      if (!(state->url.ends_with('/') || entry_pathname.starts_with('/')))
+        cat_url_ss << '/';
 
-        const void *buffer;
-        std::size_t size;
-        std::int64_t offset;
+      cat_url_ss << entry_pathname;
+      auto cat_url = cat_url_ss.str();
+      std::cerr << '[' << session_id_ << "] UPLOAD-ENTRY " << cat_url
+                << std::endl;
 
-        while (true) {
-          r = archive_read_data_block(a, &buffer, &size, &offset);
-          if (r == ARCHIVE_EOF) {
-            break;
-          }
-          if (r < ARCHIVE_OK) {
-            std::cerr << "Error reading entry contents: "
-                      << archive_error_string(a) << std::endl;
-            return end_catui();
-          }
+      auto path = upload_path(cat_url);
+      std::ofstream of{path};
 
-          of.write(static_cast<const char *>(buffer), size);
+      const void *buffer;
+      std::size_t size;
+      std::int64_t offset;
+
+      while (true) {
+        r = archive_read_data_block(a, &buffer, &size, &offset);
+        if (r == ARCHIVE_EOF) {
+          break;
+        }
+        if (r < ARCHIVE_OK) {
+          std::cerr << "Error reading entry contents: "
+                    << archive_error_string(a) << std::endl;
+          return end_catui();
         }
 
-        of.close();
+        of.write(static_cast<const char *>(buffer), size);
       }
 
-      archive_read_free(a);
-
-    } else if (rtype == HTML_RT_FILE) {
-      auto path = upload_path(*url);
-      std::ofstream of{path};
-      // TODO - error handling
-      of.write(contents->data(), n);
       of.close();
-    } else {
-      std::cerr << "Unknown resource type '" << rtype << '\'' << std::endl;
-      return end_catui();
     }
 
-    do_recv();
+    archive_read_free(a);
+    // don't need to keep archive since we wrote the contents
+    std::filesystem::remove(state->path);
   }
 
   void do_navigate(const html_omsg_navigate &msg) {
