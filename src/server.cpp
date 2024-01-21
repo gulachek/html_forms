@@ -13,6 +13,9 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <filesystem>
+#include <pwd.h>
+#include <sys/types.h>
+#include <uuid/uuid.h>
 
 extern "C" {
 #include <catui.h>
@@ -36,6 +39,25 @@ struct read_upload_state {
   std::ofstream of;
   html_resource_type rtype;
 };
+
+std::filesystem::path home_dir() {
+  ::uid_t uid = ::getuid();
+  struct ::passwd *pw = ::getpwuid(uid);
+
+  if (pw && pw->pw_dir)
+    return std::filesystem::path{pw->pw_dir};
+
+  return {};
+}
+
+std::filesystem::path session_dir() {
+  auto home = home_dir();
+  if (home.empty())
+    return home;
+
+  // macOS
+  return home / "Library/Caches/com.gulachek.html-forms/session-content";
+}
 
 class catui_connection : public std::enable_shared_from_this<catui_connection>,
                          public http_session,
@@ -703,9 +725,7 @@ int main(int argc, char *argv[]) {
   auto const address = asio::ip::make_address("127.0.0.1");
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
 
-  // make sure we have a directory to work with
-  auto temp_dir = std::filesystem::temp_directory_path();
-  auto session_dir = temp_dir / "com.gulachek.html-forms" / "session-content";
+  auto session_dir = ::session_dir();
   std::filesystem::create_directories(session_dir);
 
   std::cerr << "[server] Writing content to " << session_dir << std::endl;
