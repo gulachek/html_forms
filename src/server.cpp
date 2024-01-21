@@ -79,6 +79,8 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   boost::uuids::name_generator_sha1 name_gen_{boost::uuids::ns::url()};
   const std::filesystem::path &all_sessions_dir_;
   std::filesystem::path docroot_;
+  std::filesystem::path archives_dir_;
+  std::filesystem::path files_dir_;
 
   std::shared_ptr<my::ws_stream> ws_;
 
@@ -110,13 +112,24 @@ public:
 
   // Start the asynchronous operation
   void run() {
+
     // TODO - thread safety on http_ ptr
     session_id_ = http_->add_session(weak_from_this());
     // TODO - weak from this
     window_id_ = browser_.reserve_window(weak_from_this());
 
     docroot_ = all_sessions_dir_ / session_id_;
-    std::filesystem::create_directory(docroot_);
+
+#define MKDIR std::filesystem::create_directory
+    MKDIR(docroot_);
+    auto uploads = docroot_ / "uploads";
+    MKDIR(uploads);
+    files_dir_ = uploads / "files";
+    MKDIR(files_dir_);
+    archives_dir_ = uploads / "archives";
+    MKDIR(archives_dir_);
+#undef MKDIR
+
     std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
 
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
@@ -459,12 +472,21 @@ private:
     }
   }
 
-  std::filesystem::path upload_path(const std::string_view &url) const {
+  std::filesystem::path
+  upload_path(const std::string_view &url,
+              html_resource_type rtype = HTML_RT_FILE) const {
     auto uuid = name_gen_(url.data(), url.size());
     std::ostringstream os;
     os << uuid;
-    auto path = docroot_ / os.str();
-    return path;
+
+    switch (rtype) {
+    case HTML_RT_ARCHIVE:
+      return archives_dir_ / os.str();
+    case HTML_RT_FILE:
+      return files_dir_ / os.str();
+    default:
+      throw std::logic_error("unhandled resource type");
+    }
   }
 
   std::string_view mime_type_for(const std::string_view &url) const {
@@ -556,21 +578,10 @@ private:
     std::cerr << '[' << session_id_ << "] UPLOAD " << msg.url << std::endl;
 
     auto state = std::make_shared<read_upload_state>();
-    state->path = upload_path(msg.url);
-
-    switch (msg.rtype) {
-    case HTML_RT_ARCHIVE:
-      state->path += ".archive";
-      break;
-    case HTML_RT_FILE:
-      // nothing to do
-      break;
-    default:
-      return fatal_error("Invalid resource type");
-    }
-
+    state->path = upload_path(msg.url, msg.rtype);
     state->rtype = msg.rtype;
     state->url = msg.url;
+
     state->of.open(state->path);
 
     if (!state->of)
