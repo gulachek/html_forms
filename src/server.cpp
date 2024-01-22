@@ -8,12 +8,14 @@
 #include "my-asio.hpp"
 #include "my-beast.hpp"
 #include "open-url.hpp"
+#include "session_lock.hpp"
 
 #include <algorithm>
 #include <archive.h>
 #include <archive_entry.h>
 #include <filesystem>
 #include <pwd.h>
+#include <semaphore.h>
 #include <sys/types.h>
 #include <uuid/uuid.h>
 
@@ -78,6 +80,7 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::map<std::string, std::string> mime_overrides_;
   boost::uuids::name_generator_sha1 name_gen_{boost::uuids::ns::url()};
   const std::filesystem::path &all_sessions_dir_;
+  session_lock session_mtx_;
   std::filesystem::path docroot_;
   std::filesystem::path archives_dir_;
   std::filesystem::path files_dir_;
@@ -115,13 +118,14 @@ public:
 
     // TODO - thread safety on http_ ptr
     session_id_ = http_->add_session(weak_from_this());
-    // TODO - weak from this
     window_id_ = browser_.reserve_window(weak_from_this());
 
     docroot_ = all_sessions_dir_ / session_id_;
 
 #define MKDIR std::filesystem::create_directory
     MKDIR(docroot_);
+    std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
+
     auto uploads = docroot_ / "uploads";
     MKDIR(uploads);
     files_dir_ = uploads / "files";
@@ -130,7 +134,17 @@ public:
     MKDIR(archives_dir_);
 #undef MKDIR
 
-    std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
+    // TODO nack or fatal_error
+    if (!session_mtx_.open(session_id_)) {
+      std::cerr << "Failed to open session lock" << std::endl;
+      return;
+    }
+
+    if (!session_mtx_.try_lock()) {
+      ::perror("sem_wait");
+      std::cerr << "Failed to obtain session lock" << std::endl;
+      return;
+    }
 
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
   }

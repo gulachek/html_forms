@@ -139,6 +139,13 @@ cli((book, opts) => {
 		await writeFile(cpp, bufToCppArray('loading_html', buf), 'utf8');
 	});
 
+	let session_lock;
+	if (platform() === 'darwin') {
+		session_lock = Path.src('src/posix/session_lock.cpp');
+	} else {
+		throw new Error('Platform not supported');
+	}
+
 	const cppServer = c.addExecutable({
 		name: 'server',
 		precompiledHeader: 'private/asio-pch.hpp',
@@ -157,6 +164,7 @@ cli((book, opts) => {
 			'src/my-beast.cpp',
 			'src/browser.cpp',
 			'src/parse_target.cpp',
+			session_lock,
 			formsJsCpp,
 			loadingHtmlCpp,
 		],
