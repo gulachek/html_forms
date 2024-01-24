@@ -122,18 +122,6 @@ public:
 
     docroot_ = all_sessions_dir_ / session_id_;
 
-#define MKDIR std::filesystem::create_directory
-    MKDIR(docroot_);
-    std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
-
-    auto uploads = docroot_ / "uploads";
-    MKDIR(uploads);
-    files_dir_ = uploads / "files";
-    MKDIR(files_dir_);
-    archives_dir_ = uploads / "archives";
-    MKDIR(archives_dir_);
-#undef MKDIR
-
     // TODO nack or fatal_error
     if (!session_mtx_.open(session_id_)) {
       std::cerr << "Failed to open session lock" << std::endl;
@@ -145,6 +133,18 @@ public:
       std::cerr << "Failed to obtain session lock" << std::endl;
       return;
     }
+
+#define MKDIR std::filesystem::create_directory
+    MKDIR(docroot_);
+    std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
+
+    auto uploads = docroot_ / "uploads";
+    MKDIR(uploads);
+    files_dir_ = uploads / "files";
+    MKDIR(files_dir_);
+    archives_dir_ = uploads / "archives";
+    MKDIR(archives_dir_);
+#undef MKDIR
 
     asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
   }
@@ -771,6 +771,26 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+  std::thread cleanup{[&session_dir]() {
+    for (const auto &entry : std::filesystem::directory_iterator{session_dir}) {
+      const auto &session_path = entry.path();
+      auto session_id = session_path.filename();
+
+      session_lock mtx{session_id};
+      if (!mtx.try_lock())
+        continue;
+
+      try {
+        std::cerr << "Cleaning up inactive session " << session_id << std::endl;
+        std::filesystem::remove_all(session_path);
+      } catch (const std::exception &ex) {
+        std::cerr << "Failed to clean up session: " << ex.what() << std::endl;
+      }
+
+      mtx.unlock();
+    }
+  }};
+
   std::thread th{[&ioc, lb, http, &browsr, &session_dir]() {
     while (true) {
       int client = catui_server_accept(lb, stderr);
@@ -788,6 +808,7 @@ int main(int argc, char *argv[]) {
     }
   }};
   th.detach();
+  cleanup.detach();
 
   ioc.run();
 
