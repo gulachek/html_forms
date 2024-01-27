@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <archive.h>
 #include <archive_entry.h>
+#include <boost/endian/arithmetic.hpp>
 #include <filesystem>
 #include <pwd.h>
 #include <semaphore.h>
@@ -37,9 +38,13 @@ concept member_fn_of =
 struct read_upload_state {
   std::filesystem::path path;
   std::string url;
-  std::size_t nbytes_left;
   std::ofstream of;
   html_resource_type rtype;
+  bool is_stream;
+  boost::endian::little_uint32_at chunk_size;
+  std::size_t chunk_bytes_left;
+
+  bool has_more_chunks() const { return is_stream && chunk_size > 0; }
 };
 
 std::filesystem::path home_dir() {
@@ -601,17 +606,31 @@ private:
     if (!state->of)
       return fatal_error("Error opening file for upload");
 
-    state->nbytes_left = msg.content_length;
+    state->chunk_bytes_left = msg.content_length;
+    state->is_stream = msg.content_length == 0;
 
-    if (msg.content_length == 0) {
-      return fatal_error("Stream not implemented");
-    }
+    if (state->is_stream)
+      read_upload_chunk_size(state);
+    else
+      read_upload_chunk(state);
+  }
 
+  void read_upload_chunk_size(std::shared_ptr<read_upload_state> state) {
+    my::async_readn(stream_, asio::buffer(&state->chunk_size, 2), 2,
+                    bind(&self::on_read_upload_chunk_size, state));
+  }
+
+  void on_read_upload_chunk_size(std::shared_ptr<read_upload_state> state,
+                                 std::error_code ec, std::size_t n) {
+    if (ec)
+      return fatal_error(ec.message());
+
+    state->chunk_bytes_left = state->chunk_size;
     read_upload_chunk(state);
   }
 
   void read_upload_chunk(std::shared_ptr<read_upload_state> state) {
-    std::size_t n = std::min(state->nbytes_left, output_msg_buf_.size());
+    std::size_t n = std::min(state->chunk_bytes_left, output_msg_buf_.size());
 
     my::async_readn(stream_, asio::buffer(output_msg_buf_), n,
                     bind(&self::on_read_upload_chunk, state));
@@ -619,9 +638,8 @@ private:
 
   void on_read_upload_chunk(std::shared_ptr<read_upload_state> state,
                             std::error_code ec, std::size_t n) {
-    if (ec) {
+    if (ec)
       return fatal_error(ec.message());
-    }
 
     try {
       state->of.write((const char *)output_msg_buf_.data(), n);
@@ -629,9 +647,11 @@ private:
       return fatal_error(ex.what());
     }
 
-    state->nbytes_left -= n;
-    if (state->nbytes_left > 0) {
+    state->chunk_bytes_left -= n;
+    if (state->chunk_bytes_left > 0) {
       read_upload_chunk(state);
+    } else if (state->has_more_chunks()) {
+      read_upload_chunk_size(state);
     } else {
       state->of.close();
       switch (state->rtype) {

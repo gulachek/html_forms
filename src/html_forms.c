@@ -321,6 +321,13 @@ int html_upload_stream_write(html_connection *con, const void *data,
 
 int html_upload_stream_close(html_connection *con) {
   // no current need to flush since unbuffered right now
+  uint16_t zero = 0;
+  int ret = write(con->fd, &zero, 2);
+  if (ret == -1) {
+    printf_err(con, "Failed to close stream: %s", strerror(errno));
+    return 0;
+  }
+
   return 1;
 }
 

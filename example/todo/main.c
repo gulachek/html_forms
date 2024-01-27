@@ -14,23 +14,22 @@ int hprintf(html_connection *con, const char *fmt, ...) {
   while (1) {
     va_list args;
     va_start(args, fmt);
-    int ret = vsnprintf(buf, sizeof(buf), fmt, args);
+    int ret = vsnprintf(buf, bufsz, fmt, args);
     va_end(args);
 
     if (ret < 0) {
       return ret;
-    } else if (ret <= bufsz) {
+    } else if (ret < bufsz) {
       if (!html_upload_stream_write(con, buf, ret)) {
         return -1;
       }
 
       return ret;
     } else {
-      buf = malloc(ret);
+      bufsz = ret + 1;
+      buf = malloc(bufsz);
       if (!buf)
         return -1;
-
-      bufsz = ret;
     }
   }
 
