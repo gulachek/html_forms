@@ -59,13 +59,15 @@ enum html_out_msg_type {
 
 /** Resource types to be uploaded */
 enum html_resource_type {
-  HTML_RT_FILE = 0,   /**< Plain file is uploaded */
-  HTML_RT_ARCHIVE = 1 /**< Archive (like .tar.gz) is uploaded */
+  HTML_RT_FILE = 0,    /**< Plain file is uploaded */
+  HTML_RT_ARCHIVE = 1, /**< Archive (like .tar.gz) is uploaded */
 };
 
 /** Upload resources */
 struct html_omsg_upload {
-  size_t content_length;         /**< The file or archive size in bytes */
+  size_t content_length;         /**< The file or archive size in bytes. A
+                                    content_length of indicates that the upload will be
+                                    transmitted in sized chunks. */
   enum html_resource_type rtype; /**< The resource type */
   char url[HTML_URL_SIZE];       /**< URL to point at the resource */
 };
@@ -180,7 +182,8 @@ int HTML_API html_decode_in_msg(const void *data, size_t size,
  * @param[in] size The size of @a data's buffer in bytes
  * @param[in] url The URL that the browser can request that will point to the
  * associated resource
- * @param[in] content_length The size of the uploaded file or archive in bytes
+ * @param[in] content_length The size of the uploaded file or archive in bytes.
+ * 0 indicates that the upload will be streamed in sized chunks.
  * @param[in] type The type of resource being uploaded
  * @return The size of the encoded message or -1 on failure
  */

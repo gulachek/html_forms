@@ -173,7 +173,7 @@ int html_encode_omsg_upload(void *data, size_t size, const char *url,
                             size_t content_length,
                             enum html_resource_type type) {
   // url: string
-  // size: number
+  // size?: number (missing means stream sized-chunks)
   // resType: number
 
   cJSON *obj = cJSON_CreateObject();
@@ -183,8 +183,10 @@ int html_encode_omsg_upload(void *data, size_t size, const char *url,
   if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_UPLOAD))
     return -1;
 
-  if (!cJSON_AddNumberToObject(obj, "size", content_length))
-    return -1;
+  if (content_length > 0) {
+    if (!cJSON_AddNumberToObject(obj, "size", content_length))
+      return -1;
+  }
 
   if (!cJSON_AddStringToObject(obj, "url", url))
     return -1;
@@ -253,6 +255,72 @@ static int html_send_upload(html_connection *con, const char *url,
     }
   }
 
+  return 1;
+}
+
+int html_upload_stream_open(html_connection *con, const char *url) {
+  if (!con)
+    return 0;
+
+  char buf[HTML_MSG_SIZE];
+  int n = html_encode_omsg_upload(buf, sizeof(buf), url, 0, HTML_RT_FILE);
+
+  if (n < 0) {
+    printf_err(con, "Failed to serialize message (likely memory issue)");
+    return 0;
+  }
+
+  int ec = msgstream_fd_send(con->fd, buf, sizeof(buf), n);
+  if (ec) {
+    printf_err(con, "Failed to send message: %s", msgstream_errstr(ec));
+    return 0;
+  }
+
+  return 1;
+}
+
+typedef uint8_t le16_buf[2];
+
+static int le_encode(size_t n, le16_buf buf) {
+  if (n > 0xffff)
+    return 0;
+
+  buf[0] = n % 0x100;
+  n /= 0x100;
+  buf[1] = n % 0x100;
+  return 1;
+}
+
+static int le_decode(const le16_buf buf, size_t *n) {
+  *n = buf[0] + (0x100 * buf[1]);
+  return 1;
+}
+
+int html_upload_stream_write(html_connection *con, const void *data,
+                             size_t size) {
+  le16_buf chunk_size;
+  if (!le_encode(size, chunk_size)) {
+    printf_err(con, "Failed to encode chunk size header");
+    return 0;
+  }
+
+  int ret = write(con->fd, chunk_size, sizeof(chunk_size));
+  if (ret == -1) {
+    printf_err(con, "Failed to write chunk size: %s", strerror(errno));
+    return 0;
+  }
+
+  ret = write(con->fd, data, size);
+  if (ret == -1) {
+    printf_err(con, "Failed to write chunk: %s", strerror(errno));
+    return 0;
+  }
+
+  return 1;
+}
+
+int html_upload_stream_close(html_connection *con) {
+  // no current need to flush since unbuffered right now
   return 1;
 }
 
@@ -523,16 +591,19 @@ static int uintval(cJSON *obj, const char *key, unsigned int *val) {
 
 static int html_decode_upload_msg(cJSON *obj, struct html_omsg_upload *msg) {
   // url: string
-  // size: number
+  // size?: number
   // archive: bool
   if (!copy_string(obj, "url", msg->url, sizeof(msg->url)))
     return 0;
 
   unsigned int size;
-  if (!uintval(obj, "size", &size))
-    return 0;
-
-  msg->content_length = (size_t)size;
+  if (cJSON_HasObjectItem(obj, "size")) {
+    if (!uintval(obj, "size", &size))
+      return 0;
+  } else {
+    size = 0;
+  }
+  msg->content_length = size;
 
   unsigned int rtype;
   if (!uintval(obj, "resType", &rtype))

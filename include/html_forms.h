@@ -110,6 +110,34 @@ void HTML_API html_reject_close(html_connection *con);
 const char *HTML_API html_errmsg(html_connection *con);
 
 /**
+ * Open stream to upload contents that will be available from URL
+ * @param con The connection
+ * @param url The url that the file will be accessible from the browser
+ * @return 1 on success, 0 otherwise
+ */
+int HTML_API html_upload_stream_open(html_connection *con, const char *url);
+
+/**
+ * Write contents to an upload stream
+ * @param con The connection
+ * @param data Pointer to buffer that holds data to be written
+ * @param size The number of bytes contained in @a data to be written
+ * @return 1 on success, 0 otherwise
+ * @remark The caller cannot assume that the data will be sent to the server
+ * with this call. The implementation may buffer the contents for efficiency and
+ * sync when @ref html_upload_stream_close is called.
+ */
+int HTML_API html_upload_stream_write(html_connection *con, const void *data,
+                                      size_t size);
+
+/**
+ * Close an upload stream. Ensure all written contents are sent.
+ * @param con The connection
+ * @return 1 on success, 0 otherwise
+ */
+int HTML_API html_upload_stream_close(html_connection *con);
+
+/**
  * Upload file to be accessible from URL
  * @param con The connection
  * @param url The url that the file will be accessible from the browser

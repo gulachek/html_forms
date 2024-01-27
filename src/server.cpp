@@ -602,6 +602,11 @@ private:
       return fatal_error("Error opening file for upload");
 
     state->nbytes_left = msg.content_length;
+
+    if (msg.content_length == 0) {
+      return fatal_error("Stream not implemented");
+    }
+
     read_upload_chunk(state);
   }
 

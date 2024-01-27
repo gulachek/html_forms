@@ -4,7 +4,38 @@
 #include <stdio.h>
 #include <string.h>
 
-int loop(sqlite3 *db, html_connection *con, const char *render_path);
+int loop(sqlite3 *db, html_connection *con);
+
+int hprintf(html_connection *con, const char *fmt, ...) {
+  static char dummy;
+  static char *buf = &dummy;
+  static size_t bufsz = sizeof(char);
+
+  while (1) {
+    va_list args;
+    va_start(args, fmt);
+    int ret = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    if (ret < 0) {
+      return ret;
+    } else if (ret <= bufsz) {
+      if (!html_upload_stream_write(con, buf, ret)) {
+        return -1;
+      }
+
+      return ret;
+    } else {
+      buf = malloc(ret);
+      if (!buf)
+        return -1;
+
+      bufsz = ret;
+    }
+  }
+
+  return -1;
+}
 
 int main() {
   sqlite3 *db;
@@ -21,18 +52,16 @@ int main() {
     return 1;
   }
 
-  const char *render_path = tmpnam(NULL);
-  int ret = loop(db, con, render_path);
+  int ret = loop(db, con);
 
   html_disconnect(con);
   sqlite3_close(db);
-  remove(render_path);
   return ret;
 }
 
-void print_header(FILE *f) {
-  fprintf(
-      f,
+void print_header(html_connection *con) {
+  hprintf(
+      con,
       "<!DOCTYPE html>"
       "<html>"
       "<head>"
@@ -61,20 +90,18 @@ void print_header(FILE *f) {
       "</svg>");
 }
 
-void print_footer(FILE *f) { fprintf(f, "</body></html>"); }
+void print_footer(html_connection *con) { hprintf(con, "</body></html>"); }
 
-int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
-               html_form **pform) {
-  FILE *f = fopen(render_path, "w");
-  if (!f)
+int view_tasks(sqlite3 *db, html_connection *con, html_form **pform) {
+  if (!html_upload_stream_open(con, "/view.html"))
     return 0;
 
-  print_header(f);
-  fprintf(f, "<h1> Todo items </h1>"
-             "<form class=\"toolbar\">"
-             "<button name=\"action\" value=\"add\"> New Task </button>"
-             "</form>"
-             "<ul class=\"todo-items\">");
+  print_header(con);
+  hprintf(con, "<h1> Todo items </h1>"
+               "<form class=\"toolbar\">"
+               "<button name=\"action\" value=\"add\"> New Task </button>"
+               "</form>"
+               "<ul class=\"todo-items\">");
 
   sqlite3_stmt *select;
   const char *sql = "SELECT id, title, priority, due_date "
@@ -123,7 +150,7 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
       break;
     }
 
-    fprintf(f,
+    hprintf(con,
             "<li>"
             "<form class=\"todo-line\">"
             "<input type=\"hidden\" name=\"id\" value=\"%d\" />"
@@ -146,11 +173,10 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
     goto fail;
   }
 
-  fprintf(f, "</ul>");
-  print_footer(f);
+  hprintf(con, "</ul>");
+  print_footer(con);
 
-  fflush(f);
-  if (!html_upload_file(con, "/view.html", render_path)) {
+  if (!html_upload_stream_close(con)) {
     fprintf(stderr, "Failed to upload /view.html: %s\n", html_errmsg(con));
     goto fail;
   }
@@ -167,17 +193,14 @@ int view_tasks(sqlite3 *db, html_connection *con, const char *render_path,
   }
 
 success:
-  fclose(f);
   return 1;
 
 fail:
-  fclose(f);
   sqlite3_finalize(select);
   return 0;
 }
 
-int edit_task(int task, sqlite3 *db, html_connection *con,
-              const char *render_path, html_form **pform) {
+int edit_task(int task, sqlite3 *db, html_connection *con, html_form **pform) {
   sqlite3_stmt *stmt;
   const char *sql = "SELECT title, description, priority, due_date "
                     "FROM tasks WHERE id = ?";
@@ -202,8 +225,7 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
   int priority = sqlite3_column_int(stmt, 2);
   const unsigned char *due_date = sqlite3_column_text(stmt, 3);
 
-  FILE *f = fopen(render_path, "w");
-  if (!f)
+  if (!html_upload_stream_open(con, "/edit.html"))
     return 0;
 
   char esc_title[1024];
@@ -245,8 +267,8 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
     break;
   }
 
-  print_header(f);
-  fprintf(f,
+  print_header(con);
+  hprintf(con,
           "<form>"
           "<h1> %s </h1>"
           "<div class=\"toolbar\">"
@@ -271,7 +293,7 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
           esc_title, esc_title, esc_desc, important_selected, normal_selected,
           lower_selected, esc_date);
 
-  print_footer(f);
+  print_footer(con);
 
   int ec = sqlite3_finalize(stmt);
   stmt = NULL;
@@ -281,8 +303,7 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
     goto fail;
   }
 
-  fflush(f);
-  if (!html_upload_file(con, "/edit.html", render_path)) {
+  if (!html_upload_stream_close(con)) {
     fprintf(stderr, "Failed to upload /edit.html: %s\n", html_errmsg(con));
     goto fail;
   }
@@ -354,11 +375,9 @@ int edit_task(int task, sqlite3 *db, html_connection *con,
   }
 
 success:
-  fclose(f);
   return 1;
 
 fail:
-  fclose(f);
   sqlite3_finalize(stmt);
   return 0;
 }
@@ -426,7 +445,7 @@ fail:
   return 0;
 }
 
-int loop(sqlite3 *db, html_connection *con, const char *render_path) {
+int loop(sqlite3 *db, html_connection *con) {
   if (!init_db(db))
     return 1;
 
@@ -441,7 +460,7 @@ int loop(sqlite3 *db, html_connection *con, const char *render_path) {
 
   while (1) {
     if (strcmp(action, "view") == 0) {
-      if (!view_tasks(db, con, render_path, &form)) {
+      if (!view_tasks(db, con, &form)) {
         return 1;
       }
 
@@ -457,7 +476,7 @@ int loop(sqlite3 *db, html_connection *con, const char *render_path) {
 
       action = "edit";
     } else if (strcmp(action, "edit") == 0) {
-      if (!edit_task(selected_task, db, con, render_path, &form)) {
+      if (!edit_task(selected_task, db, con, &form)) {
         return 1;
       }
 
