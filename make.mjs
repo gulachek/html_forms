@@ -201,7 +201,21 @@ cli((book, opts) => {
 		link: ['boost-unit_test_framework', htmlLib],
 	});
 
-	const tests = [urlTest, parseFormTest, escapeStringTest];
+	const testSock = Path.build('catui.sock');
+	const catuiDir = Path.build('catui');
+
+	const formsTest = c.addExecutable({
+		name: 'forms_test',
+		src: ['test/forms_test.cpp'],
+		privateIncludes: ['private'],
+		privateDefinitions: {
+			CATUI_ADDRESS: `"${book.abs(testSock)}"`,
+			CATUI_DIR: `"${book.abs(catuiDir)}"`,
+		},
+		link: ['boost-unit_test_framework', htmlLib],
+	});
+
+	const tests = [urlTest, parseFormTest, escapeStringTest, formsTest];
 	const runTests = tests.map((t) => t.dir().join(t.basename + '.run'));
 
 	for (let i = 0; i < tests.length; ++i) {
