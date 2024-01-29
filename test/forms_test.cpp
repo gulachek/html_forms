@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <chrono>
 #include <csignal>
+#include <filesystem>
 #include <thread>
 
 #include "html_connection.h"
@@ -14,6 +15,7 @@
 struct f {
   html_connection *con_ = nullptr;
   pid_t catuid_pid_;
+  std::filesystem::path content_dir_;
 
   f() {
     ::unlink(CATUI_ADDRESS);
@@ -25,6 +27,8 @@ struct f {
     }
 
     ::setenv("CATUI_ADDRESS", CATUI_ADDRESS, 1);
+
+    content_dir_ = std::filesystem::path{CONTENT_DIR};
 
     auto ret = ::fork();
     if (ret == -1) {
@@ -66,8 +70,7 @@ struct f {
 
 BOOST_FIXTURE_TEST_CASE(HasValueInSubmittedFormField, f) {
   html_upload_stream_open(con_, "/index.html");
-  const char *contents = R"(
-<!DOCTYPE html>
+  const char *contents = R"(<!DOCTYPE html>
 <html>
 <head>
 <script src="/html/forms.js"></script>
@@ -104,4 +107,46 @@ btn.click();
 
   std::string_view field = field_c;
   BOOST_TEST(field == "value");
+  html_form_free(form);
+}
+
+BOOST_FIXTURE_TEST_CASE(UploadIndividualFiles, f) {
+  auto docroot = content_dir_ / "basic";
+  auto index = docroot / "index.html";
+  auto css = docroot / "main.css";
+  auto js = docroot / "main.js";
+
+  html_upload_file(con_, "/index.html", index.c_str());
+  html_upload_file(con_, "/main.css", css.c_str());
+  html_upload_file(con_, "/main.js", js.c_str());
+
+  html_navigate(con_, "/index.html");
+
+  html_form *form;
+  if (!html_form_read(con_, &form)) {
+    BOOST_FAIL("Form not read");
+    return;
+  }
+
+  std::string_view color = html_form_value_of(form, "bg-color");
+  BOOST_TEST(color == "rgb(238, 255, 238)");
+  html_form_free(form);
+}
+
+BOOST_FIXTURE_TEST_CASE(UploadDirectories, f) {
+  auto docroot = content_dir_ / "basic";
+
+  html_upload_dir(con_, "/", docroot.c_str());
+
+  html_navigate(con_, "/index.html");
+
+  html_form *form;
+  if (!html_form_read(con_, &form)) {
+    BOOST_FAIL("Form not read");
+    return;
+  }
+
+  std::string_view color = html_form_value_of(form, "bg-color");
+  BOOST_TEST(color == "rgb(238, 255, 238)");
+  html_form_free(form);
 }

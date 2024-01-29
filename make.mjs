@@ -203,6 +203,7 @@ cli((book, opts) => {
 
 	const testSock = Path.build('catui.sock');
 	const catuiDir = Path.build('catui');
+	const contentDir = Path.src('test/content');
 
 	const formsTest = c.addExecutable({
 		name: 'forms_test',
@@ -211,6 +212,7 @@ cli((book, opts) => {
 		privateDefinitions: {
 			CATUI_ADDRESS: `"${book.abs(testSock)}"`,
 			CATUI_DIR: `"${book.abs(catuiDir)}"`,
+			CONTENT_DIR: `"${book.abs(contentDir)}"`,
 		},
 		link: ['boost-unit_test_framework', htmlLib],
 	});
