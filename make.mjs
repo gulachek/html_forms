@@ -236,7 +236,20 @@ cli((book, opts) => {
 		return args.spawn('doxygen');
 	});
 
-	book.add('all', [cppServer, cmds, test, browserBundle, example, doxygen]);
+	const fastTests = [
+		'url_test.run',
+		'parse-form-test.run',
+		'escape_string_test.run',
+	].map((p) => Path.build(p));
+
+	book.add('all', [
+		cppServer,
+		cmds,
+		browserBundle,
+		example,
+		doxygen,
+		...fastTests,
+	]);
 
 	book.add(config, async (args) => {
 		const [cfg, srv] = args.absAll(config, cppServer);
