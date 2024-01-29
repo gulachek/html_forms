@@ -150,3 +150,21 @@ BOOST_FIXTURE_TEST_CASE(UploadDirectories, f) {
   BOOST_TEST(color == "rgb(238, 255, 238)");
   html_form_free(form);
 }
+
+BOOST_FIXTURE_TEST_CASE(UploadTarGz, f) {
+  auto archive = content_dir_ / "basic.tar.gz";
+
+  html_upload_archive(con_, "/", archive.c_str());
+
+  html_navigate(con_, "/index.html");
+
+  html_form *form;
+  if (!html_form_read(con_, &form)) {
+    BOOST_FAIL("Form not read");
+    return;
+  }
+
+  std::string_view color = html_form_value_of(form, "bg-color");
+  BOOST_TEST(color == "rgb(238, 255, 238)");
+  html_form_free(form);
+}
