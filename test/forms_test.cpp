@@ -12,12 +12,11 @@
 #include "html_forms.h"
 #include "html_forms/encoding.h"
 
-struct f {
-  html_connection *con_ = nullptr;
+struct server {
   pid_t catuid_pid_;
-  std::filesystem::path content_dir_;
+  html_connection *con_ = nullptr;
 
-  f() {
+  server() {
     ::unlink(CATUI_ADDRESS);
 
     const char *catuid = std::getenv("CATUID");
@@ -27,8 +26,6 @@ struct f {
     }
 
     ::setenv("CATUI_ADDRESS", CATUI_ADDRESS, 1);
-
-    content_dir_ = std::filesystem::path{CONTENT_DIR};
 
     auto ret = ::fork();
     if (ret == -1) {
@@ -60,12 +57,37 @@ struct f {
       os << "Failed to connect to catuid " << html_errmsg(con_);
       BOOST_FAIL(os.str());
     }
+
+    html_upload_stream_open(con_, "/index.html");
+    const char *content = "<h1>Testing in progress</h1>";
+    html_upload_stream_write(con_, content, strlen(content));
+    html_upload_stream_close(con_);
+    html_navigate(con_, "/index.html");
   }
 
-  ~f() {
+  ~server() {
+    html_disconnect(con_);
     ::kill(catuid_pid_, SIGINT);
     ::wait(nullptr);
   }
+};
+
+BOOST_TEST_GLOBAL_FIXTURE(server);
+
+struct f {
+  html_connection *con_ = nullptr;
+  std::filesystem::path content_dir_;
+
+  f() {
+    if (!html_connect(&con_)) {
+      BOOST_FAIL("Failed to connect to server");
+      return;
+    }
+
+    content_dir_ = std::filesystem::path{CONTENT_DIR};
+  }
+
+  ~f() { html_disconnect(con_); }
 };
 
 BOOST_FIXTURE_TEST_CASE(HasValueInSubmittedFormField, f) {
