@@ -137,6 +137,22 @@ struct f {
     return val == "yes";
   }
 
+  std::string recv() {
+    char buf[4096];
+    std::size_t n;
+    if (!html_recv(con_, buf, sizeof(buf), &n)) {
+      BOOST_FAIL("Failed to receive message: " << html_errmsg(con_));
+    }
+
+    return std::string{buf, buf + n};
+  }
+
+  void send(const std::string &msg) {
+    if (!html_send(con_, msg.data(), msg.size())) {
+      BOOST_FAIL("Failed to send message: " << html_errmsg(con_));
+    }
+  }
+
   ~f() { html_disconnect(con_); }
 };
 
@@ -314,4 +330,22 @@ BOOST_FIXTURE_TEST_CASE(MimeMapByFileExtension, f) {
   std::string_view color = html_form_value_of(form, "bg-color");
   BOOST_TEST(color == "rgb(238, 255, 238)");
   html_form_free(form);
+}
+
+BOOST_FIXTURE_TEST_CASE(AppMessagesOverWebsocket, f) {
+  auto docroot = content_dir_ / "msg";
+
+  html_upload_dir(con_, "/", docroot.c_str());
+
+  html_navigate(con_, "/index.html");
+
+  auto start = recv();
+  BOOST_TEST(start == "start!");
+
+  // now it echoes
+  send("first");
+  BOOST_TEST(recv() == "first");
+
+  send("second");
+  BOOST_TEST(recv() == "second");
 }
