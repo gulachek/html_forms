@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <thread>
 
+#include <unistd.h>
+
 #include "html_connection.h"
 #include "html_forms.h"
 #include "html_forms/encoding.h"
@@ -103,6 +105,26 @@ struct f {
     if (!html_navigate(con_, "/index.html")) {
       BOOST_FAIL("Failed to navigate to /index.html: " << html_errmsg(con_));
     }
+  }
+
+  bool confirm(const std::string &msg) {
+    std::ostringstream os;
+    os << "<script src=\"/html/forms.js\"></script>"
+          "<form>"
+       << "<h1>" << msg << "</h1>"
+       << "<div><button name=\"val\" value=\"yes\">Yes</button>"
+          "<button name=\"val\" value=\"no\">No</button>"
+          "</form>";
+
+    render(os.str());
+    html_form *form;
+    if (!html_form_read(con_, &form)) {
+      BOOST_FAIL("Failed to read confirm for '" << msg
+                                                << "': " << html_errmsg(con_));
+    }
+
+    std::string val{html_form_value_of(form, "val")};
+    return val == "yes";
   }
 
   ~f() { html_disconnect(con_); }
@@ -219,4 +241,16 @@ BOOST_FIXTURE_TEST_CASE(ClickingCloseXRequestsClose, f) {
 
   html_reject_close(con_);
   BOOST_TEST(!html_close_requested(con_));
+}
+
+BOOST_FIXTURE_TEST_CASE(AbruptDisconnectShowsErrorMessage, f) {
+  render("<h1> Expect an error message above this </h1>");
+
+  ::close(con_->fd);
+
+  if (!html_connect(&con_)) {
+    BOOST_FAIL("Failed to connect to server again: " << html_errmsg(con_));
+  }
+
+  BOOST_TEST(confirm("Is there a 'disconnect' error popup?"));
 }
