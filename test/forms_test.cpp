@@ -6,6 +6,7 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 
 #include <unistd.h>
@@ -13,6 +14,15 @@
 #include "html_connection.h"
 #include "html_forms.h"
 #include "html_forms/encoding.h"
+
+void replace(std::string &s, const std::string_view &search,
+             const std::string_view &replace) {
+  auto i = s.find(search);
+  if (i == std::string::npos)
+    throw std::logic_error{"Failed to find search expression"};
+
+  s.replace(i, search.size(), replace);
+}
 
 struct server {
   pid_t catuid_pid_;
@@ -89,8 +99,8 @@ struct f {
     content_dir_ = std::filesystem::path{CONTENT_DIR};
   }
 
-  void render(const std::string &s) {
-    if (!html_upload_stream_open(con_, "/index.html")) {
+  void render(const std::string &s, const std::string &url = "/index.html") {
+    if (!html_upload_stream_open(con_, url.c_str())) {
       BOOST_FAIL("Failed to open upload stream: " << html_errmsg(con_));
     }
 
@@ -102,7 +112,7 @@ struct f {
       BOOST_FAIL("Failed to close upload stream: " << html_errmsg(con_));
     }
 
-    if (!html_navigate(con_, "/index.html")) {
+    if (!html_navigate(con_, url.c_str())) {
       BOOST_FAIL("Failed to navigate to /index.html: " << html_errmsg(con_));
     }
   }
@@ -253,4 +263,55 @@ BOOST_FIXTURE_TEST_CASE(AbruptDisconnectShowsErrorMessage, f) {
   }
 
   BOOST_TEST(confirm("Is there a 'disconnect' error popup?"));
+}
+
+BOOST_FIXTURE_TEST_CASE(MimeMapByFileExtension, f) {
+  auto docroot = content_dir_ / "basic";
+  auto index = docroot / "index.html";
+  auto css = docroot / "main.css";
+  auto js = docroot / "main.js";
+
+  // odd extension swap to prove that this is respected
+  html_upload_file(con_, "/main.js", css.c_str());
+  html_upload_file(con_, "/main.css", js.c_str());
+
+  auto n = std::filesystem::file_size(index);
+  std::string contents;
+  contents.resize(n);
+  std::ifstream file{index};
+  if (!file) {
+    BOOST_FAIL("Failed to open file " << index);
+  }
+
+  file.read(contents.data(), n);
+  ::replace(contents, "main.css", "main.temp");
+  ::replace(contents, "main.js", "main.css");
+  ::replace(contents, "main.temp", "main.js");
+
+  // NOW THE FUN PART
+  html_mime_map *mimes = html_mime_map_create();
+  if (!mimes) {
+    BOOST_FAIL("Failed to allocate mime map");
+  }
+
+  html_mime_map_add(mimes, ".test", "text/html");
+  html_mime_map_add(mimes, ".css", "text/javascript");
+  html_mime_map_add(mimes, ".js", "text/css");
+
+  if (!html_mime_map_apply(con_, mimes)) {
+    BOOST_FAIL("Failed to apply mime map: " << html_errmsg(con_));
+  }
+
+  html_mime_map_free(mimes);
+
+  render(contents, "/index.test");
+
+  html_form *form;
+  if (!html_form_read(con_, &form)) {
+    BOOST_FAIL("Form not read: " << html_errmsg(con_));
+  }
+
+  std::string_view color = html_form_value_of(form, "bg-color");
+  BOOST_TEST(color == "rgb(238, 255, 238)");
+  html_form_free(form);
 }
