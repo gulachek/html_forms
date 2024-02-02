@@ -159,7 +159,7 @@ int html_close_requested(const html_connection *con) {
 void html_reject_close(html_connection *con) {
   if (!con)
     return;
-  con->close_requested = 1;
+  con->close_requested = 0;
 }
 
 const char *html_errmsg(html_connection *con) {

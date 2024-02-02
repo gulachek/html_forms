@@ -87,6 +87,24 @@ struct f {
     content_dir_ = std::filesystem::path{CONTENT_DIR};
   }
 
+  void render(const std::string &s) {
+    if (!html_upload_stream_open(con_, "/index.html")) {
+      BOOST_FAIL("Failed to open upload stream: " << html_errmsg(con_));
+    }
+
+    if (!html_upload_stream_write(con_, s.data(), s.size())) {
+      BOOST_FAIL("Failed to upload contents: " << html_errmsg(con_));
+    }
+
+    if (!html_upload_stream_close(con_)) {
+      BOOST_FAIL("Failed to close upload stream: " << html_errmsg(con_));
+    }
+
+    if (!html_navigate(con_, "/index.html")) {
+      BOOST_FAIL("Failed to navigate to /index.html: " << html_errmsg(con_));
+    }
+  }
+
   ~f() { html_disconnect(con_); }
 };
 
@@ -189,4 +207,16 @@ BOOST_FIXTURE_TEST_CASE(UploadTarGz, f) {
   std::string_view color = html_form_value_of(form, "bg-color");
   BOOST_TEST(color == "rgb(238, 255, 238)");
   html_form_free(form);
+}
+
+BOOST_FIXTURE_TEST_CASE(ClickingCloseXRequestsClose, f) {
+  render("<h1> Press the close X</h1>");
+
+  html_form *form;
+  int ret = html_form_read(con_, &form);
+  BOOST_TEST(!ret, "Expected html_form_read to return falsy");
+  BOOST_TEST(html_close_requested(con_));
+
+  html_reject_close(con_);
+  BOOST_TEST(!html_close_requested(con_));
 }
