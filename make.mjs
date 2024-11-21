@@ -148,7 +148,9 @@ cli((book, opts) => {
 
 	const cppServer = c.addExecutable({
 		name: 'server',
-		precompiledHeader: 'private/asio-pch.hpp',
+		// Somehow has a bug where the wrong boost-json header is
+		// included.
+		//precompiledHeader: 'private/asio-pch.hpp',
 		privateIncludes: ['private'],
 		privateDefinitions: {
 			...platformDef,
