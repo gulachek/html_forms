@@ -4,5 +4,7 @@ node_modules
 build.log
 .cache
 pkgconfig
+conan
 dist
 types
+config.json

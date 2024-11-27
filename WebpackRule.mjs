@@ -46,11 +46,7 @@ class WebpackRule {
 		this.worker.on('message', (msg) => this.onWorkerMessage(msg));
 		this.worker.unref();
 
-		if (opts.isDevelopment) {
-			config.mode = 'development';
-			config.devtool = 'inline-source-map';
-		}
-
+		Object.assign(config, opts);
 		this.config = config;
 		this.srcPath = Path.src(srcPath);
 		this.outPath = Path.build(outPath);

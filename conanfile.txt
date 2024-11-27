@@ -1,6 +1,4 @@
 [requires]
-catui/0.1.2
-msgstream/0.3.0
 boost/1.83.0
 cjson/1.7.16
 libarchive/3.7.2

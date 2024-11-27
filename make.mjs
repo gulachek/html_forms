@@ -1,42 +1,114 @@
 import { cli, Path } from 'esmakefile';
-import { C, platformCompiler } from 'esmakefile-c';
-import { writeFile, readFile, copyFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { addWebpack } from './WebpackRule.mjs';
+import { Clang } from './jslib/clang.mjs';
+import Ajv from 'ajv';
 
-cli((book, opts) => {
-	const c = new C(platformCompiler(), {
-		...opts,
-		cVersion: 'C17',
-		cxxVersion: 'C++20',
-		book,
-	});
-
-	const config = Path.build('catui/com.gulachek.html-forms/0.1.0/config.json');
-
-	book.add('all', [config]);
-
-	const htmlLib = c.addLibrary({
-		name: 'html_forms',
-		privateDefinitions: {
-			HTML_API: 'EXPORT',
+const ajv = new Ajv();
+const stringArray = { type: 'array', items: { type: 'string' } };
+const schema = {
+	type: 'object',
+	properties: {
+		cc: { type: 'string' },
+		cxx: { type: 'string' },
+		cppflags: { ...stringArray },
+		cflags: { ...stringArray },
+		cxxflags: { ...stringArray },
+		ldflags: { ...stringArray },
+		pkgConfigPaths: { ...stringArray, uniqueItems: true },
+		libraryType: { type: 'string', enum: ['static', 'shared'] },
+		webpack: {
+			type: 'object',
+			properties: {
+				mode: { type: 'string', enum: ['development', 'production'] },
+				devtool: { type: 'string' },
+			},
 		},
-		privateIncludes: ['private'],
-		src: ['src/html_forms.c'],
-		link: ['msgstream', 'cjson', 'catui'],
+	},
+	additionalProperties: false,
+};
+
+const validate = ajv.compile(schema);
+
+const inputConfig = JSON.parse(await readFile('config.json', 'utf8'));
+if (!validate(inputConfig)) {
+	console.error('The configuration file "config.json" has errors.');
+	console.error(validate.errors);
+	process.exit(1);
+}
+
+const config = {
+	cc: 'clang',
+	cxx: 'clang++',
+	cppflags: [],
+	cflags: [
+		'-std=c17',
+		//'-fvisibility=hidden',
+		//'-DCATUI_API=__attribute__((visibility("default")))',
+	],
+	cxxflags: ['-std=c++20'],
+	ldflags: [],
+	pkgConfigPaths: ['pkgconfig'],
+	libraryType: 'static',
+	webpack: {
+		devtool: 'inline-src-map',
+		mode: 'development',
+	},
+	...inputConfig, // override the defaults
+};
+
+cli((make) => {
+	const pc = Path.build('pkgconfig');
+	const htmlFormsPc = pc.join('html_forms.pc');
+
+	const clang = new Clang(make, config);
+
+	const catuiConfig = Path.build(
+		'catui/com.gulachek.html-forms/0.1.0/config.json',
+	);
+
+	make.add('all', [catuiConfig]);
+
+	const htmlFormsPkg = ['msgstream', 'cjson', 'catui', 'unixsocket'];
+	const htmlLib = clang.link({
+		name: 'html_forms',
+		runtime: 'c',
+		linkType: 'static', // TODO configurable
+		pkg: htmlFormsPkg,
+		binaries: [clang.compile('src/html_forms.c', { pkg: htmlFormsPkg })],
+	});
+	make.add(htmlFormsPc, async (args) => {
+		await writeFile(
+			args.abs(htmlFormsPc),
+			`
+		builddir=\${pcfiledir}/..
+		Name: html_forms
+		Version: 0.1.0
+		Description: 
+		Requires.private: ${htmlFormsPkg.join(' ')}
+		Cflags:
+		Libs: -L\${builddir} -lhtml_forms
+		`,
+		);
 	});
 
-	const mimeSwap = c.addExecutable({
+	const mimeSwap = clang.link({
 		name: 'mime_swap',
-		src: ['example/mime_swap/main.c'],
-		link: [htmlLib],
+		runtime: 'c',
+		linkType: 'executable',
+		binaries: [
+			clang.compile('example/mime_swap/main.c', { pkg: [htmlFormsPc] }),
+		],
+		pkg: [htmlFormsPc],
 	});
+	make.add(mimeSwap, [htmlLib]);
 
 	const tarballIndexHtml = Path.src('example/tarball/docroot/index.html');
 	const tarballMainCss = Path.src('example/tarball/docroot/style/main.css');
 
 	const tarballArchive = Path.build('example/tarball.tar.gz');
-	book.add(tarballArchive, [tarballIndexHtml, tarballMainCss], async (args) => {
+	make.add(tarballArchive, [tarballIndexHtml, tarballMainCss], async (args) => {
 		const [src, tar] = args.absAll(
 			Path.src('example/tarball/docroot'),
 			tarballArchive,
@@ -56,53 +128,68 @@ cli((book, opts) => {
 		]);
 	});
 
-	const tarball = c.addExecutable({
+	const tarball = clang.link({
 		name: 'tarball',
-		src: ['example/tarball/main.c'],
-		privateDefinitions: {
-			TARBALL_PATH: `"${book.abs(tarballArchive)}"`,
-		},
-		link: [htmlLib],
+		runtime: 'c',
+		linkType: 'executable',
+		binaries: [
+			clang.compile('example/tarball/main.c', {
+				extraFlags: [`-DTARBALL_PATH="${make.abs(tarballArchive)}"`],
+			}),
+			htmlLib,
+		],
+		pkg: [htmlFormsPc],
 	});
+	make.add(tarball, [htmlLib]);
 
-	const todo = c.addExecutable({
+	const todo = clang.link({
 		name: 'todo',
-		src: ['example/todo/main.c'],
-		privateDefinitions: {
-			DOCROOT_PATH: `"${book.abs(Path.src('example/todo/docroot'))}"`,
-		},
-		link: [htmlLib, 'sqlite3'],
+		runtime: 'c',
+		linkType: 'executable',
+		binaries: [
+			clang.compile('example/todo/main.c', {
+				extraFlags: [
+					`-DDOCROOT_PATH="${make.abs(Path.src('example.todo/docroot'))}"`,
+				],
+				pkg: [htmlFormsPc, 'sqlite3'],
+			}),
+		],
+		pkg: [htmlFormsPc, 'sqlite3'],
 	});
+	make.add(todo, [htmlLib]);
 
-	const loading = c.addExecutable({
+	const loading = clang.link({
 		name: 'loading',
-		src: ['example/loading/main.cpp'],
-		privateDefinitions: {
-			DOCROOT_PATH: `"${book.abs(Path.src('example/loading/docroot'))}"`,
-		},
-		link: [htmlLib],
+		runtime: 'c++',
+		linkType: 'executable',
+		binaries: [
+			clang.compile('example/loading/main.cpp', {
+				pkg: [htmlFormsPc],
+				extraFlags: [
+					`-DDOCROOT_PATH="${make.abs(Path.src('example/loading/docroot'))}"`,
+				],
+			}),
+		],
+		pkg: [htmlFormsPc],
 	});
 
-	const snake = c.addExecutable({
+	const snake = clang.link({
 		name: 'snake',
-		src: ['example/snake/main.cpp'],
-		privateDefinitions: {
-			DOCROOT_PATH: `"${book.abs(Path.src('example/snake/docroot'))}"`,
-		},
-		link: [htmlLib, 'boost-json'],
+		runtime: 'c++',
+		linkType: 'executable',
+		binaries: [
+			clang.compile('example/snake/main.cpp', {
+				pkg: [htmlFormsPc, 'boost-json'],
+				extraFlags: [
+					`-DDOCROOT_PATH="${make.abs(Path.src('example/snake/docroot'))}"`,
+				],
+			}),
+		],
+		pkg: [htmlFormsPc, 'boost-json'],
 	});
 
 	const example = Path.build('example');
-	book.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
-
-	const platformDef = {};
-	switch (platform()) {
-		case 'darwin':
-			platformDef.PLATFORM_MACOS = 1;
-			break;
-		default:
-			break;
-	}
+	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 
 	const formsTs = Path.src('src/forms.ts');
 	const browserTs = Path.src('src/browser.ts');
@@ -111,7 +198,7 @@ cli((book, opts) => {
 	const formsJsBundle = wpDir.join('forms.js');
 	const browserBundle = wpDir.join('browser.cjs');
 
-	addWebpack(book, opts, formsTs, formsJsBundle, {
+	addWebpack(make, config.webpack, formsTs, formsJsBundle, {
 		target: 'electron-main',
 		output: {
 			library: {
@@ -120,10 +207,12 @@ cli((book, opts) => {
 			},
 		},
 	});
-	addWebpack(book, opts, browserTs, browserBundle, { target: 'electron-main' });
+	addWebpack(make, config.webpack, browserTs, browserBundle, {
+		target: 'electron-main',
+	});
 
 	const formsJsCpp = Path.build('forms_js.cpp');
-	book.add(formsJsCpp, [formsJsBundle], async (args) => {
+	make.add(formsJsCpp, [formsJsBundle], async (args) => {
 		const [cpp, js] = args.absAll(formsJsCpp, formsJsBundle);
 
 		const buf = await readFile(js);
@@ -132,7 +221,7 @@ cli((book, opts) => {
 
 	const loadingHtml = Path.src('src/loading.html');
 	const loadingHtmlCpp = Path.build('loading_html.cpp');
-	book.add(loadingHtmlCpp, [loadingHtml], async (args) => {
+	make.add(loadingHtmlCpp, [loadingHtml], async (args) => {
 		const [cpp, html] = args.absAll(loadingHtmlCpp, loadingHtml);
 
 		const buf = await readFile(html);
@@ -146,95 +235,127 @@ cli((book, opts) => {
 		throw new Error('Platform not supported');
 	}
 
-	const cppServer = c.addExecutable({
+	const cppServerPkg = [
+		'catui',
+		'boost-json',
+		'boost-filesystem',
+		'libarchive',
+	];
+
+	const cppServerBin = [
+		'src/server.cpp',
+		'src/mime_type.cpp',
+		'src/http_listener.cpp',
+		'src/open-url.cpp',
+		'src/my-asio.cpp',
+		'src/my-beast.cpp',
+		'src/browser.cpp',
+		'src/parse_target.cpp',
+		session_lock,
+		formsJsCpp,
+		loadingHtmlCpp,
+	].map((s) => {
+		return clang.compile(s, {
+			pkg: cppServerPkg,
+			extraFlags: [
+				`-DBROWSER_EXE="npx"`,
+				`-DBROWSER_ARGS={"electron", "${make.abs(browserBundle)}"}`,
+				'-DPLATFORM_MACOS=1',
+			],
+		});
+	});
+
+	const cppServer = clang.link({
 		name: 'server',
+		runtime: 'c++',
+		linkType: 'executable',
 		// Somehow has a bug where the wrong boost-json header is
 		// included.
 		//precompiledHeader: 'private/asio-pch.hpp',
-		privateIncludes: ['private'],
-		privateDefinitions: {
-			...platformDef,
-			BROWSER_EXE: '"npx"',
-			BROWSER_ARGS: `{"electron", "${book.abs(browserBundle)}"}`,
-		},
-		src: [
-			'src/server.cpp',
-			'src/mime_type.cpp',
-			'src/http_listener.cpp',
-			'src/open-url.cpp',
-			'src/my-asio.cpp',
-			'src/my-beast.cpp',
-			'src/browser.cpp',
-			'src/parse_target.cpp',
-			session_lock,
-			formsJsCpp,
-			loadingHtmlCpp,
-		],
-		link: ['catui', htmlLib, 'boost-json', 'boost-filesystem', 'libarchive'],
+		binaries: [...cppServerBin],
+		pkg: [...cppServerPkg, htmlFormsPc],
 	});
+	make.add(cppServer, [htmlLib]);
 
-	// TODO - allow precompiling translation unit to be added as source
-	const parseTarget = Path.src('src/parse_target.cpp');
-	const cpParseTarget = Path.build('parse_target_copy.cpp');
-	book.add(cpParseTarget, [parseTarget], async (args) => {
-		const [src, dest] = args.absAll(parseTarget, cpParseTarget);
-		await copyFile(src, dest);
-		return true;
-	});
-
-	const urlTest = c.addExecutable({
+	const urlTest = clang.link({
 		name: 'url_test',
-		privateIncludes: ['private'],
-		src: ['test/url_test.cpp', cpParseTarget],
-		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
+		runtime: 'c++',
+		linkType: 'executable',
+		pkg: ['boost-unit_test_framework', htmlFormsPc, 'msgstream'],
+		binaries: [
+			clang.compile('test/url_test.cpp', {
+				pkg: ['boost-unit_test_framework', htmlFormsPc, 'msgstream'],
+			}),
+			Path.build('src/parse_target.o'),
+		],
 	});
+	make.add(urlTest, [htmlLib]);
 
-	const parseFormTest = c.addExecutable({
+	const parseFormTest = clang.link({
 		name: 'parse-form-test',
-		src: ['test/parse-form-test.cpp'],
-		privateIncludes: ['private'],
-		link: ['boost-unit_test_framework', htmlLib, 'msgstream'],
+		runtime: 'c++',
+		linkType: 'executable',
+		pkg: ['boost-unit_test_framework', htmlFormsPc, 'msgstream'],
+		binaries: [
+			clang.compile('test/parse-form-test.cpp', {
+				pkg: ['boost-unit_test_framework', htmlFormsPc, 'msgstream'],
+			}),
+		],
 	});
+	make.add(parseFormTest, [htmlLib]);
 
-	const escapeStringTest = c.addExecutable({
+	const escapeStringTest = clang.link({
 		name: 'escape_string_test',
-		src: ['test/escape_string_test.cpp'],
-		privateIncludes: ['private'],
-		link: ['boost-unit_test_framework', htmlLib],
+		runtime: 'c++',
+		linkType: 'executable',
+		pkg: ['boost-unit_test_framework', htmlFormsPc],
+		binaries: [
+			clang.compile('test/escape_string_test.cpp', {
+				pkg: ['boost-unit_test_framework', htmlFormsPc],
+			}),
+		],
 	});
+	make.add(escapeStringTest, [htmlLib]);
 
 	const testSock = Path.build('catui.sock');
 	const catuiDir = Path.build('catui');
 	const contentDir = Path.src('test/content');
 
-	const formsTest = c.addExecutable({
+	const formsTest = clang.link({
 		name: 'forms_test',
-		src: ['test/forms_test.cpp'],
-		privateIncludes: ['private'],
-		privateDefinitions: {
-			CATUI_ADDRESS: `"${book.abs(testSock)}"`,
-			CATUI_DIR: `"${book.abs(catuiDir)}"`,
-			CONTENT_DIR: `"${book.abs(contentDir)}"`,
-		},
-		link: ['boost-unit_test_framework', htmlLib],
+		runtime: 'c++',
+		linkType: 'executable',
+		pkg: ['boost-unit_test_framework', htmlFormsPc],
+		binaries: [
+			clang.compile('test/forms_test.cpp', {
+				pkg: ['boost-unit_test_framework', htmlFormsPc],
+				extraFlags: define(
+					{
+						CATUI_ADDRESS: testSock,
+						CATUI_DIR: catuiDir,
+						CONTENT_DIR: contentDir,
+					},
+					make,
+				),
+			}),
+		],
 	});
+	make.add(formsTest, [htmlLib]);
 
-	const tests = [urlTest, parseFormTest, escapeStringTest, formsTest];
+	const tests = [urlTest, parseFormTest, escapeStringTest];
 	const runTests = tests.map((t) => t.dir().join(t.basename + '.run'));
 
 	for (let i = 0; i < tests.length; ++i) {
-		book.add(runTests[i], [tests[i]], (args) => {
+		make.add(runTests[i], [tests[i]], (args) => {
 			return args.spawn(args.abs(tests[i]));
 		});
 	}
 
 	const test = Path.build('test');
-	book.add(test, runTests);
-
-	const cmds = c.addCompileCommands();
+	make.add(test, runTests);
 
 	const doxygen = Path.build('docs/html/index.html');
-	book.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
+	make.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
 		return args.spawn('doxygen');
 	});
 
@@ -244,17 +365,8 @@ cli((book, opts) => {
 		'escape_string_test.run',
 	].map((p) => Path.build(p));
 
-	book.add('all', [
-		cppServer,
-		cmds,
-		browserBundle,
-		example,
-		doxygen,
-		...fastTests,
-	]);
-
-	book.add(config, async (args) => {
-		const [cfg, srv] = args.absAll(config, cppServer);
+	make.add(catuiConfig, async (args) => {
+		const [cfg, srv] = args.absAll(catuiConfig, cppServer);
 		await writeFile(
 			cfg,
 			JSON.stringify({
@@ -263,6 +375,21 @@ cli((book, opts) => {
 			'utf8',
 		);
 	});
+
+	make.add('all', [
+		clang.compileCommands(),
+		cppServer,
+		tarball,
+		tarballArchive,
+		mimeSwap,
+		todo,
+		loading,
+		snake,
+		browserBundle,
+		doxygen,
+		formsTest,
+		...fastTests,
+	]);
 });
 
 function bufToCppArray(identifier, buf) {
@@ -287,4 +414,23 @@ function bufToCppArray(identifier, buf) {
 	}`);
 
 	return pieces.join('');
+}
+
+function define(obj, make) {
+	const flags = [];
+
+	for (let key in obj) {
+		const val = obj[key];
+		if (val) {
+			if (typeof val.rel === 'function') {
+				flags.push(`-D${key}="${make.abs(val)}"`);
+			} else {
+				flags.push(`-D${key}=${val}`);
+			}
+		} else {
+			flags.push(`-D${key}`);
+		}
+	}
+
+	return flags;
 }
