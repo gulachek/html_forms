@@ -74,7 +74,7 @@ cli((make) => {
 	const htmlLib = clang.link({
 		name: 'html_forms',
 		runtime: 'c',
-		linkType: 'static', // TODO configurable
+		linkType: config.libraryType,
 		pkg: htmlFormsPkg,
 		binaries: [clang.compile('src/html_forms.c', { pkg: htmlFormsPkg })],
 	});
@@ -149,7 +149,7 @@ cli((make) => {
 		binaries: [
 			clang.compile('example/todo/main.c', {
 				extraFlags: [
-					`-DDOCROOT_PATH="${make.abs(Path.src('example.todo/docroot'))}"`,
+					`-DDOCROOT_PATH="${make.abs(Path.src('example/todo/docroot'))}"`,
 				],
 				pkg: [htmlFormsPc, 'sqlite3'],
 			}),
@@ -240,6 +240,7 @@ cli((make) => {
 		'boost-json',
 		'boost-filesystem',
 		'libarchive',
+		htmlFormsPc,
 	];
 
 	const cppServerBin = [
@@ -266,16 +267,47 @@ cli((make) => {
 	});
 
 	const cppServer = clang.link({
-		name: 'server',
+		name: 'html_forms_server',
 		runtime: 'c++',
-		linkType: 'executable',
+		linkType: config.libraryType,
 		// Somehow has a bug where the wrong boost-json header is
 		// included.
 		//precompiledHeader: 'private/asio-pch.hpp',
 		binaries: [...cppServerBin],
-		pkg: [...cppServerPkg, htmlFormsPc],
+		pkg: cppServerPkg,
 	});
 	make.add(cppServer, [htmlLib]);
+	const serverPc = Path.build('pkgconfig/html_forms_server.pc');
+	const requiresPrivate = cppServerPkg
+		.map((p) => (typeof p === 'string' ? p : make.abs(p)))
+		.join(' ');
+	make.add(serverPc, async (args) => {
+		await writeFile(
+			args.abs(serverPc),
+			`
+		builddir=\${pcfiledir}/..
+		Name: html_forms_server
+		Version: 0.1.0
+		Description: 
+		Requires.private: ${requiresPrivate}
+		Cflags:
+		Libs: -L\${builddir} -lhtml_forms_server #-lc++?
+		`,
+		);
+	});
+
+	const testServer = clang.link({
+		name: 'test_server',
+		runtime: 'c++',
+		linkType: 'executable',
+		binaries: [
+			clang.compile('test/test_server.cpp', {
+				pkg: [serverPc, 'unixsocket', 'catui', 'msgstream'],
+			}),
+		],
+		pkg: [serverPc, 'unixsocket', 'catui', 'msgstream'],
+	});
+	make.add(testServer, [cppServer, htmlFormsPc]);
 
 	const urlTest = clang.link({
 		name: 'url_test',
@@ -378,7 +410,7 @@ cli((make) => {
 
 	make.add('all', [
 		clang.compileCommands(),
-		cppServer,
+		testServer,
 		tarball,
 		tarballArchive,
 		mimeSwap,

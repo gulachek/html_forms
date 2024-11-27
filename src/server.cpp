@@ -1,3 +1,4 @@
+#include "html_forms/server.h"
 #include "asio-pch.hpp"
 #include "boost/system/detail/errc.hpp"
 #include "browser.hpp"
@@ -764,78 +765,105 @@ private:
   }
 };
 
-int main(int argc, char *argv[]) {
-  // Check command line arguments.
-  if (argc != 2) {
-    std::cerr << "Usage: http-server-async <port>\n"
-              << "Example:\n"
-              << "    " << argv[0] << " 8080\n";
-    return EXIT_FAILURE;
-  }
-  auto const address = asio::ip::make_address("127.0.0.1");
-  auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
+struct html_forms_server_ {
+private:
+  unsigned short port_;
+  asio::io_context ioc_;
+  browser browser_;
+  std::filesystem::path session_dir_;
+  std::shared_ptr<http_listener> http_;
 
-  auto session_dir = ::session_dir();
-  std::filesystem::create_directories(session_dir);
-
-  std::cerr << "[server] Writing content to " << session_dir << std::endl;
-
-  // The io_context is required for all I/O
-  asio::io_context ioc{};
-
-  browser browsr{ioc};
-  browsr.run();
-
-  // Create and launch a listening port
-  auto http =
-      std::make_shared<http_listener>(ioc, tcp::endpoint{address, port});
-  http->run();
-
-  auto lb = catui_server_fd(stderr);
-  if (!lb) {
-    return EXIT_FAILURE;
+public:
+  html_forms_server_(unsigned short port)
+      : port_{port}, ioc_{}, browser_{ioc_} {
+    session_dir_ = session_dir();
+    auto const address = asio::ip::make_address("127.0.0.1");
+    http_ =
+        std::make_shared<http_listener>(ioc_, tcp::endpoint{address, port_});
   }
 
-  std::thread cleanup{[&session_dir]() {
-    for (const auto &entry : std::filesystem::directory_iterator{session_dir}) {
-      const auto &session_path = entry.path();
-      auto session_id = session_path.filename();
+  int start() {
+    std::filesystem::create_directories(session_dir_);
 
-      session_lock mtx{session_id};
-      if (!mtx.try_lock())
-        continue;
+    std::cerr << "[server] Writing content to " << session_dir_ << std::endl;
 
-      try {
-        std::cerr << "Cleaning up inactive session " << session_id << std::endl;
-        std::filesystem::remove_all(session_path);
-      } catch (const std::exception &ex) {
-        std::cerr << "Failed to clean up session: " << ex.what() << std::endl;
+    browser_.run();
+
+    // Create and launch a listening port
+    http_->run();
+
+    std::thread cleanup{[this]() {
+      for (const auto &entry :
+           std::filesystem::directory_iterator{session_dir_}) {
+        const auto &session_path = entry.path();
+        auto session_id = session_path.filename();
+
+        session_lock mtx{session_id};
+        if (!mtx.try_lock())
+          continue;
+
+        try {
+          std::cerr << "Cleaning up inactive session " << session_id
+                    << std::endl;
+          std::filesystem::remove_all(session_path);
+        } catch (const std::exception &ex) {
+          std::cerr << "Failed to clean up session: " << ex.what() << std::endl;
+        }
+
+        mtx.unlock();
       }
+    }};
 
-      mtx.unlock();
-    }
-  }};
+    cleanup.detach();
+    ioc_.run();
 
-  std::thread th{[&ioc, lb, http, &browsr, &session_dir]() {
-    while (true) {
-      int client = catui_server_accept(lb, stderr);
-      if (client < 0) {
-        std::cerr << "Failed to accept catui client" << std::endl;
-        close(client);
-        break;
-      }
+    return EXIT_SUCCESS;
+  }
 
-      auto con = std::make_shared<catui_connection>(
-          my::stream_descriptor{asio::make_strand(ioc), client}, http, browsr,
-          session_dir);
+  int stop() {
+    ioc_.stop();
+    return 1;
+  }
 
-      con->run();
-    }
-  }};
-  th.detach();
-  cleanup.detach();
+  int connect(int client) {
+    auto con = std::make_shared<catui_connection>(
+        my::stream_descriptor{asio::make_strand(ioc_), client}, http_, browser_,
+        session_dir_);
 
-  ioc.run();
+    con->run();
+    return 1;
+  }
+};
 
-  return EXIT_SUCCESS;
+html_forms_server *html_forms_server_init(unsigned short port) {
+  return new html_forms_server_(port);
+}
+
+void html_forms_server_free(html_forms_server *server) {
+  if (server) {
+    delete server;
+  }
+}
+
+int html_forms_server_run(html_forms_server *server) {
+  if (!server) {
+    return 0;
+  }
+
+  return server->start();
+}
+
+int html_forms_server_stop(html_forms_server *server) {
+  if (!server) {
+    return 0;
+  }
+
+  return server->stop();
+}
+
+int html_forms_server_connect(html_forms_server *server, int fd) {
+  if (!server)
+    return 0;
+
+  return server->connect(fd);
 }
