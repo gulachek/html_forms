@@ -2,7 +2,6 @@
 #include "html_forms/server.h"
 #include <iterator>
 
-using close_window_handler = browser::close_window_handler;
 using window_id = browser::window_id;
 using window_watcher = browser::window_watcher;
 
@@ -32,7 +31,10 @@ browser::reserve_window(const std::weak_ptr<window_watcher> &watcher) {
 
 void browser::release_window(window_id window) {
   watchers_.erase(window);
-  async_close_window(window, [](std::error_condition) {});
+  html_forms_server_event ev;
+  ev.type = HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW;
+  ev.data.close_win.window_id = window;
+  notify_event(ev);
 }
 
 void browser::show_error(window_id window, const std::string &msg) {
@@ -50,15 +52,6 @@ void browser::load_url(window_id window, const std::string_view &url) {
   ev.data.open_url.window_id = window;
   ::strlcpy(ev.data.open_url.url, url.data(), sizeof(ev.data.open_url.url));
   notify_event(ev);
-}
-
-void browser::async_close_window(
-    window_id window, const std::function<close_window_handler> &cb) {
-  html_forms_server_event ev;
-  ev.type = HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW;
-  ev.data.close_win.window_id = window;
-  notify_event(ev);
-  cb(std::error_condition{});
 }
 
 browser::window_watcher::~window_watcher() {}
