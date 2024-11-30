@@ -773,8 +773,7 @@ private:
   std::shared_ptr<http_listener> http_;
 
 public:
-  html_forms_server_(unsigned short port)
-      : port_{port}, ioc_{}, browser_{ioc_} {
+  html_forms_server_(unsigned short port) : port_{port}, ioc_{}, browser_{} {
     session_dir_ = session_dir();
     auto const address = asio::ip::make_address("127.0.0.1");
     http_ =
@@ -785,8 +784,6 @@ public:
     std::filesystem::create_directories(session_dir_);
 
     std::cerr << "[server] Writing content to " << session_dir_ << std::endl;
-
-    browser_.run();
 
     // Create and launch a listening port
     http_->run();
