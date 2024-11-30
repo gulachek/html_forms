@@ -15,7 +15,6 @@ public:
     virtual void window_close_requested() = 0;
   };
 
-  using load_url_handler = void(std::error_condition);
   using close_window_handler = void(std::error_condition);
 
   browser();
@@ -25,8 +24,7 @@ public:
   void release_window(window_id window);
   void show_error(window_id window, const std::string &msg);
 
-  void async_load_url(window_id window, const std::string_view &url,
-                      const std::function<load_url_handler> &cb);
+  void load_url(window_id window, const std::string_view &url);
 
   void async_close_window(window_id window,
                           const std::function<close_window_handler> &cb);

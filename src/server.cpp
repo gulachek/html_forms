@@ -734,15 +734,7 @@ private:
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     log() << "Opening " << os.str() << std::endl;
 
-    browser_.async_load_url(window_id_, os.str(), bind(&self::on_load_url));
-  }
-
-  void on_load_url(std::error_condition ec) {
-    if (ec) {
-      log() << "Error opening window: " << ec.message() << std::endl;
-      return;
-    }
-
+    browser_.load_url(window_id_, os.str());
     do_recv();
   }
 

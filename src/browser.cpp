@@ -1,9 +1,7 @@
 #include "browser.hpp"
-#include "async_msgstream.hpp"
 #include "html_forms/server.h"
 #include <iterator>
 
-using load_url_handler = browser::load_url_handler;
 using close_window_handler = browser::close_window_handler;
 using window_id = browser::window_id;
 using window_watcher = browser::window_watcher;
@@ -45,15 +43,13 @@ void browser::show_error(window_id window, const std::string &msg) {
   notify_event(ev);
 }
 
-void browser::async_load_url(window_id window, const std::string_view &url,
-                             const std::function<load_url_handler> &cb) {
+void browser::load_url(window_id window, const std::string_view &url) {
 
   html_forms_server_event ev;
   ev.type = HTML_FORMS_SERVER_EVENT_OPEN_URL;
   ev.data.open_url.window_id = window;
   ::strlcpy(ev.data.open_url.url, url.data(), sizeof(ev.data.open_url.url));
   notify_event(ev);
-  cb(std::error_condition{});
 }
 
 void browser::async_close_window(
