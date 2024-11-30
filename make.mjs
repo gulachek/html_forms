@@ -76,7 +76,7 @@ cli((make) => {
 		runtime: 'c',
 		linkType: config.libraryType,
 		pkg: htmlFormsPkg,
-		binaries: [clang.compile('src/html_forms.c', { pkg: htmlFormsPkg })],
+		binaries: [clang.compile('src/client/html_forms.c', { pkg: htmlFormsPkg })],
 	});
 	make.add(htmlFormsPc, async (args) => {
 		await writeFile(
@@ -191,8 +191,8 @@ cli((make) => {
 	const example = Path.build('example');
 	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 
-	const formsTs = Path.src('src/forms.ts');
-	const browserTs = Path.src('src/browser.ts');
+	const formsTs = Path.src('src/server/forms.ts');
+	const browserTs = Path.src('test/browser.ts');
 
 	const wpDir = Path.build('webpack');
 	const formsJsBundle = wpDir.join('forms.js');
@@ -211,7 +211,7 @@ cli((make) => {
 		target: 'electron-main',
 	});
 
-	const formsJsCpp = Path.build('forms_js.cpp');
+	const formsJsCpp = Path.build('server/forms_js.cpp');
 	make.add(formsJsCpp, [formsJsBundle], async (args) => {
 		const [cpp, js] = args.absAll(formsJsCpp, formsJsBundle);
 
@@ -219,8 +219,8 @@ cli((make) => {
 		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
 	});
 
-	const loadingHtml = Path.src('src/loading.html');
-	const loadingHtmlCpp = Path.build('loading_html.cpp');
+	const loadingHtml = Path.src('src/server/loading.html');
+	const loadingHtmlCpp = Path.build('server/loading_html.cpp');
 	make.add(loadingHtmlCpp, [loadingHtml], async (args) => {
 		const [cpp, html] = args.absAll(loadingHtmlCpp, loadingHtml);
 
@@ -230,7 +230,7 @@ cli((make) => {
 
 	let session_lock;
 	if (platform() === 'darwin') {
-		session_lock = Path.src('src/posix/session_lock.cpp');
+		session_lock = Path.src('src/server/posix/session_lock.cpp');
 	} else {
 		throw new Error('Platform not supported');
 	}
@@ -244,14 +244,14 @@ cli((make) => {
 	];
 
 	const cppServerBin = [
-		'src/server.cpp',
-		'src/mime_type.cpp',
-		'src/http_listener.cpp',
-		'src/open-url.cpp',
-		'src/my-asio.cpp',
-		'src/my-beast.cpp',
-		'src/browser.cpp',
-		'src/parse_target.cpp',
+		'src/server/server.cpp',
+		'src/server/mime_type.cpp',
+		'src/server/http_listener.cpp',
+		'src/server/open-url.cpp',
+		'src/server/my-asio.cpp',
+		'src/server/my-beast.cpp',
+		'src/server/browser.cpp',
+		'src/server/parse_target.cpp',
 		session_lock,
 		formsJsCpp,
 		loadingHtmlCpp,
@@ -318,7 +318,7 @@ cli((make) => {
 			clang.compile('test/url_test.cpp', {
 				pkg: ['boost-unit_test_framework', htmlFormsPc, 'msgstream'],
 			}),
-			Path.build('src/parse_target.o'),
+			Path.build('src/server/parse_target.o'),
 		],
 	});
 	make.add(urlTest, [htmlLib]);
