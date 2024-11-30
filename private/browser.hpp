@@ -3,6 +3,8 @@
 
 #include "asio-pch.hpp"
 #include "async_mutex.hpp"
+#include "html_forms/server.h"
+#include <boost/process.hpp>
 
 #include <msgstream.h>
 
@@ -31,6 +33,10 @@ public:
 
   void async_close_window(window_id window,
                           const std::function<close_window_handler> &cb);
+
+  void set_event_callback(html_forms_server_event_callback *cb, void *ctx);
+
+  void request_close(window_id window);
 
 private:
   template <typename Fn, typename... Args> auto bind(Fn &&fn, Args &&...args) {
@@ -63,6 +69,10 @@ private:
   std::atomic<window_id> next_window_id_;
   std::map<window_id, std::function<load_url_handler>> load_url_handlers_;
   std::map<window_id, std::weak_ptr<window_watcher>> watchers_;
+
+  void *event_ctx_;
+  std::function<html_forms_server_event_callback> event_cb_;
+  void notify_event(const html_forms_server_event &ev);
 };
 
 #endif

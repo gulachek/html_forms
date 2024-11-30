@@ -258,11 +258,7 @@ cli((make) => {
 	].map((s) => {
 		return clang.compile(s, {
 			pkg: cppServerPkg,
-			extraFlags: [
-				`-DBROWSER_EXE="npx"`,
-				`-DBROWSER_ARGS={"electron", "${make.abs(browserBundle)}"}`,
-				'-DPLATFORM_MACOS=1',
-			],
+			extraFlags: ['-DPLATFORM_MACOS=1'],
 		});
 	});
 
@@ -302,10 +298,14 @@ cli((make) => {
 		linkType: 'executable',
 		binaries: [
 			clang.compile('test/test_server.cpp', {
-				pkg: [serverPc, 'unixsocket', 'catui', 'msgstream'],
+				pkg: [serverPc, 'unixsocket', 'catui', 'msgstream', 'boost-json'],
+				extraFlags: [
+					`-DBROWSER_EXE="npx"`,
+					`-DBROWSER_ARGS={"npx", "electron", "${make.abs(browserBundle)}"}`,
+				],
 			}),
 		],
-		pkg: [serverPc, 'unixsocket', 'catui', 'msgstream'],
+		pkg: [serverPc, 'unixsocket', 'catui', 'msgstream', 'boost-json'],
 	});
 	make.add(testServer, [cppServer, htmlFormsPc]);
 

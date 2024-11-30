@@ -99,6 +99,8 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
                            std::forward<FnArgs>(args)...);
   }
 
+  std::ostream &log() { return std::cerr << '[' << session_id_ << "] "; }
+
 public:
   catui_connection(my::stream_descriptor &&stream,
                    const std::shared_ptr<http_listener> &http, browser &browsr,
@@ -184,9 +186,9 @@ public:
   void connect_ws(boost::asio::ip::tcp::socket &&sock,
                   my::string_request &&req) override {
     if (ws_) {
-      std::cerr << "Aborting websocket connection because one already exists "
-                   "for the session"
-                << std::endl;
+      log() << "Aborting websocket connection because one already exists "
+               "for the session"
+            << std::endl;
       sock.close();
       return;
     }
@@ -213,7 +215,7 @@ private:
 
   void on_ack(std::error_condition ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Error sending ack: " << ec.message() << std::endl;
+      log() << "Error sending ack: " << ec.message() << std::endl;
       return end_catui();
     }
 
@@ -222,6 +224,8 @@ private:
   }
 
   void do_recv() {
+    log() << "Waiting to receive html message" << std::endl;
+
     asio::dispatch([this] {
       stream_.get_executor(),
           my::async_msgstream_recv(stream_, asio::buffer(output_msg_buf_),
@@ -231,8 +235,7 @@ private:
 
   void on_recv(std::error_condition ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Error receiving html message: " << ec.message()
-                << std::endl;
+      log() << "Error receiving html message: " << ec.message() << std::endl;
       return end_catui();
     }
 
@@ -258,13 +261,13 @@ private:
       do_close();
       break;
     default:
-      std::cerr << "Invalid message type: " << msg.type << std::endl;
+      log() << "Invalid message type: " << msg.type << std::endl;
       break;
     }
   }
 
   void do_close() {
-    std::cerr << '[' << session_id_ << "] CLOSE" << std::endl;
+    log() << "CLOSE" << std::endl;
     gracefully_closed_ = true;
     end_catui();
     browser_.release_window(window_id_);
@@ -279,8 +282,7 @@ private:
         break;
       }
 
-      std::cerr << '[' << session_id_ << "] MIME ." << ext_c << " -> " << mime_c
-                << std::endl;
+      log() << "MIME ." << ext_c << " -> " << mime_c << std::endl;
       mime_overrides_[ext_c] = mime_c;
     }
 
@@ -289,7 +291,7 @@ private:
   }
 
   void request_close() {
-    std::cerr << '[' << session_id_ << "] CLOSE-REQ" << std::endl;
+    log() << "CLOSE-REQ" << std::endl;
     submit_buf_.resize(HTML_MSG_SIZE);
     int msg_size =
         html_encode_imsg_close_req(submit_buf_.data(), submit_buf_.size());
@@ -303,19 +305,18 @@ private:
 
   void on_request_close(std::error_condition ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Failed to send close request: " << ec.message()
-                << std::endl;
+      log() << "Failed to send close request: " << ec.message() << std::endl;
       return end_catui();
     }
   }
 
   void on_ws_accept(beast::error_code ec) {
     if (ec) {
-      std::cerr << "Failed to accept websocket: " << ec.message() << std::endl;
+      log() << "Failed to accept websocket: " << ec.message() << std::endl;
       return;
     }
 
-    std::cerr << "Websocket connected" << std::endl;
+    log() << "Websocket connected" << std::endl;
     do_ws_read();
   }
 
@@ -330,8 +331,7 @@ private:
 
   void do_ws_read() {
     if (!ws_) {
-      std::cerr << "Invalid do_ws_read with no websocket connection"
-                << std::endl;
+      log() << "Invalid do_ws_read with no websocket connection" << std::endl;
       return;
     }
 
@@ -341,8 +341,8 @@ private:
   void on_ws_read(beast::error_code ec, std::size_t size) {
     if (ec) {
       if (ec == beast::websocket::error::closed) {
-        std::cerr << "Failed to read ws message for session " << session_id_
-                  << ": " << ec.message() << std::endl;
+        log() << "Failed to read ws message for session " << session_id_ << ": "
+              << ec.message() << std::endl;
       }
 
       return end_ws();
@@ -355,13 +355,13 @@ private:
   }
 
   void do_send_recv_msg(std::string &msg) {
-    std::cerr << '[' << session_id_ << "] RECV: " << msg << std::endl;
+    log() << "RECV: " << msg << std::endl;
 
     // TODO - need to sync w/ POST
     submit_buf_.resize(HTML_MSG_SIZE);
     if (html_encode_imsg_app_msg(submit_buf_.data(), submit_buf_.size(),
                                  msg.size()) < 0) {
-      std::cerr << "Failed to encode recv msg" << std::endl;
+      log() << "Failed to encode recv msg" << std::endl;
       return end_ws();
     }
 
@@ -379,7 +379,7 @@ private:
   void on_submit_recv_app_msg(std::shared_ptr<std::string> msg,
                               std::error_condition ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Failed to send RECV msg" << std::endl;
+      log() << "Failed to send RECV msg" << std::endl;
       return end_catui();
     }
 
@@ -391,7 +391,7 @@ private:
   void on_send_recv_app_msg_content(std::shared_ptr<std::string> msg,
                                     std::error_code ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Failed to send RECV msg content" << std::endl;
+      log() << "Failed to send RECV msg content" << std::endl;
       return end_catui();
     }
 
@@ -400,8 +400,8 @@ private:
 
   void on_ws_write(beast::error_code ec, std::size_t size) {
     if (ec) {
-      std::cerr << "Failed to send ws message for session " << session_id_
-                << std::endl;
+      log() << "Failed to send ws message for session " << session_id_
+            << std::endl;
       return end_ws();
     }
 
@@ -426,7 +426,7 @@ private:
         return respond400("Failed to encode form submission", std::move(req));
       }
 
-      std::cerr << "Initiating post with body: " << req.body() << std::endl;
+      log() << "Initiating post with body: " << req.body() << std::endl;
       asio::dispatch(stream_.get_executor(),
                      bind(&self::submit_post, std::make_shared<std::string>(
                                                   std::move(req.body()))));
@@ -445,7 +445,7 @@ private:
   }
 
   void fatal_error(const std::string &msg) {
-    std::cerr << "Fatal error: " << msg << std::endl;
+    log() << "Fatal error: " << msg << std::endl;
 
     std::shared_ptr<std::string> err_buf = std::make_shared<std::string>();
     err_buf->resize(HTML_MSG_SIZE);
@@ -465,7 +465,7 @@ private:
   }
 
   void submit_post(std::shared_ptr<std::string> body) {
-    std::cerr << "Posting body: " << *body << std::endl;
+    log() << "Posting body: " << *body << std::endl;
     auto buf = asio::buffer(submit_buf_.data(), HTML_MSG_SIZE);
     my::async_msgstream_send(stream_, buf, submit_buf_.size(),
                              bind(&self::on_submit_post, body));
@@ -474,7 +474,7 @@ private:
   void on_submit_post(std::shared_ptr<std::string> body,
                       std::error_condition ec, std::size_t n) {
     if (ec) {
-      std::cerr << "Error sending form to app: " << ec.message() << std::endl;
+      log() << "Error sending form to app: " << ec.message() << std::endl;
       return end_catui();
     }
 
@@ -486,8 +486,8 @@ private:
   void on_write_form(std::shared_ptr<std::string> body, std::error_code ec,
                      std::size_t n) {
     if (ec) {
-      std::cerr << "Error sending form contents to app: " << ec.message()
-                << std::endl;
+      log() << "Error sending form contents to app: " << ec.message()
+            << std::endl;
       return end_catui();
     }
   }
@@ -595,7 +595,7 @@ private:
   }
 
   void do_read_upload(const html_omsg_upload &msg) {
-    std::cerr << '[' << session_id_ << "] UPLOAD " << msg.url << std::endl;
+    log() << "UPLOAD " << msg.url << std::endl;
 
     auto state = std::make_shared<read_upload_state>();
     state->path = upload_path(msg.url, msg.rtype);
@@ -677,8 +677,8 @@ private:
     archive_read_support_format_all(a);
     int r = archive_read_open_filename(a, state->path.c_str(), 10240);
     if (r != ARCHIVE_OK) {
-      std::cerr << "Failed to open archive " << archive_error_string(a)
-                << std::endl;
+      log() << "Failed to open archive " << archive_error_string(a)
+            << std::endl;
       return end_catui(); // fatal
     }
 
@@ -698,8 +698,7 @@ private:
 
       cat_url_ss << entry_pathname;
       auto cat_url = cat_url_ss.str();
-      std::cerr << '[' << session_id_ << "] UPLOAD-ENTRY " << cat_url
-                << std::endl;
+      log() << "UPLOAD-ENTRY " << cat_url << std::endl;
 
       auto path = upload_path(cat_url);
       std::ofstream of{path};
@@ -714,8 +713,8 @@ private:
           break;
         }
         if (r < ARCHIVE_OK) {
-          std::cerr << "Error reading entry contents: "
-                    << archive_error_string(a) << std::endl;
+          log() << "Error reading entry contents: " << archive_error_string(a)
+                << std::endl;
           return end_catui();
         }
 
@@ -733,14 +732,14 @@ private:
   void do_navigate(const html_omsg_navigate &msg) {
     std::ostringstream os;
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
-    std::cerr << "Opening " << os.str() << std::endl;
+    log() << "Opening " << os.str() << std::endl;
 
     browser_.async_load_url(window_id_, os.str(), bind(&self::on_load_url));
   }
 
   void on_load_url(std::error_condition ec) {
     if (ec) {
-      std::cerr << "Error opening window: " << ec.message() << std::endl;
+      log() << "Error opening window: " << ec.message() << std::endl;
       return;
     }
 
@@ -758,7 +757,7 @@ private:
       return end_catui();
     }
 
-    std::cerr << '[' << session_id_ << "] SEND: " << ws_send_buf_ << std::endl;
+    log() << "SEND: " << ws_send_buf_ << std::endl;
 
     my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
                        bind(&self::on_ws_write));
@@ -833,6 +832,15 @@ public:
     con->run();
     return 1;
   }
+
+  void close_window(int window_id) {
+    asio::dispatch(ioc_.get_executor(),
+                   std::bind(&browser::request_close, &browser_, window_id));
+  }
+
+  void set_ev_callback(html_forms_server_event_callback *cb, void *ctx) {
+    browser_.set_event_callback(cb, ctx);
+  }
 };
 
 html_forms_server *html_forms_server_init(unsigned short port) {
@@ -866,4 +874,20 @@ int html_forms_server_connect(html_forms_server *server, int fd) {
     return 0;
 
   return server->connect(fd);
+}
+
+int html_forms_server_set_event_callback(html_forms_server *server,
+                                         html_forms_server_event_callback *cb,
+                                         void *ctx) {
+  server->set_ev_callback(cb, ctx);
+  return 1;
+}
+
+int HTML_API html_forms_server_close_window(html_forms_server *server,
+                                            int window_id) {
+  if (!server)
+    return 0;
+
+  server->close_window(window_id);
+  return 1;
 }

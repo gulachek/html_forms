@@ -6,8 +6,114 @@
 
 #include <unistd.h>
 
+#include <boost/json.hpp>
+
+#include <array>
+#include <cassert>
 #include <iostream>
+#include <string_view>
 #include <thread>
+
+namespace json = boost::json;
+
+int spawn_browser(int *fd_in, int *fd_out);
+
+#define BROWSER_BUF_SIZE 2048
+
+class event_listener {
+private:
+  html_forms_server *html_;
+  int browser_in_;
+  int browser_out_;
+
+  static void event_callback(const html_forms_server_event *ev, void *ctx);
+
+  void on_event(const html_forms_server_event &ev) {
+    if (ev.type == HTML_FORMS_SERVER_EVENT_OPEN_URL) {
+      const auto &open = ev.data.open_url;
+      std::cout << "open " << open.url << std::endl;
+      json::object obj;
+      obj["type"] = "open";
+      obj["url"] = open.url;
+      obj["windowId"] = open.window_id;
+      send(obj);
+    } else if (ev.type == HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW) {
+      const auto &close = ev.data.close_win;
+      std::cout << "close window " << close.window_id << std::endl;
+      json::object obj;
+      obj["type"] = "close";
+      obj["windowId"] = close.window_id;
+      send(obj);
+    } else if (ev.type == HTML_FORMS_SERVER_EVENT_SHOW_ERROR) {
+      const auto &err = ev.data.show_err;
+      std::cout << "show error " << err.msg << std::endl;
+      json::object obj;
+      obj["type"] = "error";
+      obj["windowId"] = err.window_id;
+      obj["msg"] = err.msg;
+      send(obj);
+    } else {
+      std::cerr << "Unknown event type '" << ev.type << '\'' << std::endl;
+    }
+  }
+
+  void send(const json::object &obj) {
+    std::string msg = json::serialize(obj);
+    if (msg.size() > BROWSER_BUF_SIZE) {
+      std::cerr << "Message too big: " << msg << std::endl;
+      return;
+    }
+
+    msgstream_fd_send(browser_in_, msg.data(), BROWSER_BUF_SIZE, msg.size());
+  }
+
+public:
+  event_listener(html_forms_server *html) : html_{html} {}
+
+  void listen() {
+    html_forms_server_set_event_callback(html_, event_callback, this);
+
+    if (spawn_browser(&browser_in_, &browser_out_) == -1) {
+      std::cerr << "Failed to spawn browser process" << std::endl;
+      return;
+    }
+
+    std::thread browser_th{[this] {
+      std::array<char, BROWSER_BUF_SIZE> buf;
+
+      while (true) {
+        std::size_t msg_size;
+        int ret =
+            msgstream_fd_recv(browser_out_, buf.data(), buf.size(), &msg_size);
+        if (ret) {
+          std::cerr << msgstream_errstr(ret) << std::endl;
+          return;
+        }
+
+        std::string_view msg{buf.data(), msg_size};
+        json::object obj = json::parse(msg).as_object();
+        if (obj["type"] == "close") {
+          int window_id = obj["windowId"].as_int64();
+          std::cout << "Requesting to close window " << window_id << std::endl;
+          html_forms_server_close_window(html_, window_id);
+        } else {
+          std::cerr << "Unknown browser message type: " << obj["type"]
+                    << std::endl;
+          return;
+        }
+      }
+    }};
+
+    browser_th.detach();
+  }
+};
+
+void event_listener::event_callback(const html_forms_server_event *ev,
+                                    void *ctx) {
+  auto evl = static_cast<event_listener *>(ctx);
+  assert(!!evl);
+  evl->on_event(*ev);
+}
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -24,6 +130,9 @@ int main(int argc, char **argv) {
     std::cerr << "Failed to initialize server on port " << port << std::endl;
     return 1;
   }
+
+  event_listener ev{server};
+  ev.listen();
 
   int catui_sock = unix_socket();
   if (catui_sock == -1) {
@@ -92,8 +201,51 @@ int main(int argc, char **argv) {
     }
 
     html_forms_server_connect(server, con);
+#undef NOPE
   }
 
   html_forms_th.join();
+  return 0;
+}
+
+int spawn_browser(int *fd_in, int *fd_out) {
+  int pipe_in[2], pipe_out[2];
+  if (::pipe(pipe_in) || ::pipe(pipe_out)) {
+    ::perror("pipe");
+    return -1;
+  }
+
+  pid_t pid = ::fork();
+  if (pid == -1) {
+    ::perror("fork");
+    return -1;
+  } else if (pid == 0) {
+    // child - read in, write out
+    ::close(pipe_in[1]);
+    ::close(pipe_out[0]);
+    if (::dup2(pipe_in[0], STDIN_FILENO) == -1) {
+      ::perror("dup2 (stdin)");
+      ::exit(EXIT_FAILURE);
+    }
+
+    if (::dup2(pipe_out[1], STDOUT_FILENO) == -1) {
+      ::perror("dup2 (stdout)");
+      ::exit(EXIT_FAILURE);
+    }
+
+    std::vector<const char *> argv = BROWSER_ARGS;
+    argv.push_back(nullptr); // null terminate
+    if (::execvp(BROWSER_EXE, (char *const *)argv.data()) == -1) {
+      ::perror("execvp");
+      ::exit(EXIT_FAILURE);
+    }
+  } else {
+    // parent - write in, read out
+    ::close(pipe_in[0]);
+    ::close(pipe_out[1]);
+    *fd_in = pipe_in[1];
+    *fd_out = pipe_out[0];
+  }
+
   return 0;
 }

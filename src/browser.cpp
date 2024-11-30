@@ -1,9 +1,10 @@
 #include "browser.hpp"
 #include "async_msgstream.hpp"
 #include "boost/asio/any_io_executor.hpp"
+#include "html_forms/server.h"
 #include <iterator>
 
-namespace bp = boost::process;
+// namespace bp = boost::process;
 namespace asio = boost::asio;
 namespace json = boost::json;
 
@@ -16,15 +17,16 @@ using window_watcher = browser::window_watcher;
 #define BUF_SIZE 2048
 
 browser::browser(asio::io_context &ioc)
-    : exe_{bp::search_path(BROWSER_EXE)}, stdin_{ioc}, stdout_{ioc},
+    : exe_{}, stdin_{ioc}, stdout_{ioc},
       next_window_id_{1}, mtx_{ioc.get_executor()} {
-  argv_ = BROWSER_ARGS;
   in_buf_.resize(BUF_SIZE);
 }
 
 void browser::run() {
-  proc_ = std::make_shared<bp::child>(exe_, argv_,
-                                      bp::std_in<stdin_, bp::std_out> stdout_);
+  /*
+proc_ = std::make_shared<bp::child>(exe_, argv_,
+                                bp::std_in<stdin_, bp::std_out> stdout_);
+                                                                                                                                                  */
 
   asio::post(stdout_.get_executor(), bind(&browser::do_recv));
 }
@@ -46,24 +48,28 @@ void browser::on_recv(std::error_condition ec, std::size_t n) {
   auto type = obj["type"].as_string();
   if (type == "close") {
     int window = obj["windowId"].as_int64();
-    auto it = watchers_.find(window);
-    if (it == watchers_.end()) {
-      std::cerr << "Attempting to close window that has no watcher: " << window
-                << std::endl;
-      return;
-    }
-
-    if (auto win_ptr = it->second.lock()) {
-      win_ptr->window_close_requested();
-    } else {
-      watchers_.erase(it);
-    }
+    request_close(window);
   } else {
     std::cerr << "Unexpected message from browser: " << type << std::endl;
     return;
   }
 
   do_recv();
+}
+
+void browser::request_close(window_id window) {
+  auto it = watchers_.find(window);
+  if (it == watchers_.end()) {
+    std::cerr << "Attempting to close window that has no watcher: " << window
+              << std::endl;
+    return;
+  }
+
+  if (auto win_ptr = it->second.lock()) {
+    win_ptr->window_close_requested();
+  } else {
+    watchers_.erase(it);
+  }
 }
 
 window_id
@@ -79,16 +85,11 @@ void browser::release_window(window_id window) {
 }
 
 void browser::show_error(window_id window, const std::string &msg) {
-  if (!proc_)
-    return;
-
-  mtx_.async_lock([this, window, msg](lock_ptr lock) {
-    json::object obj;
-    obj["type"] = "error";
-    obj["windowId"] = window;
-    obj["msg"] = msg;
-    send_msg(obj, [](std::error_condition ec, std::size_t n) {});
-  });
+  html_forms_server_event ev;
+  ev.type = HTML_FORMS_SERVER_EVENT_SHOW_ERROR;
+  ev.data.show_err.window_id = window;
+  ::strlcpy(ev.data.show_err.msg, msg.data(), sizeof(ev.data.show_err.msg));
+  notify_event(ev);
 }
 
 void browser::send_msg(
@@ -109,14 +110,12 @@ void browser::async_load_url(window_id window, const std::string_view &url,
 
   load_url_handlers_[window] = cb;
 
-  mtx_.async_lock([this, window, url = std::string{url}](lock_ptr lock) {
-    json::object obj;
-    obj["type"] = "open";
-    obj["url"] = url;
-    obj["windowId"] = window;
-
-    send_msg(obj, bind(&browser::on_write_url, window, lock));
-  });
+  html_forms_server_event ev;
+  ev.type = HTML_FORMS_SERVER_EVENT_OPEN_URL;
+  ev.data.open_url.window_id = window;
+  ::strlcpy(ev.data.open_url.url, url.data(), sizeof(ev.data.open_url.url));
+  notify_event(ev);
+  cb(std::error_condition{});
 }
 
 void browser::on_write_url(window_id window, lock_ptr lock,
@@ -131,16 +130,23 @@ void browser::on_write_url(window_id window, lock_ptr lock,
 
 void browser::async_close_window(
     window_id window, const std::function<close_window_handler> &cb) {
-  if (!proc_)
-    cb(std::error_condition{});
-
-  mtx_.async_lock([this, cb, window](lock_ptr lock) {
-    json::object obj;
-    obj["type"] = "close";
-    obj["windowId"] = window;
-
-    send_msg(obj, [cb](std::error_condition ec, std::size_t n) { cb(ec); });
-  });
+  html_forms_server_event ev;
+  ev.type = HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW;
+  ev.data.close_win.window_id = window;
+  notify_event(ev);
+  cb(std::error_condition{});
 }
 
 browser::window_watcher::~window_watcher() {}
+
+void browser::set_event_callback(html_forms_server_event_callback *cb,
+                                 void *ctx) {
+  event_cb_ = cb;
+  event_ctx_ = ctx;
+}
+
+void browser::notify_event(const html_forms_server_event &ev) {
+  if (event_cb_) {
+    event_cb_(&ev, event_ctx_);
+  }
+}
