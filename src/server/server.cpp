@@ -48,25 +48,6 @@ struct read_upload_state {
   bool has_more_chunks() const { return is_stream && chunk_size > 0; }
 };
 
-std::filesystem::path home_dir() {
-  ::uid_t uid = ::getuid();
-  struct ::passwd *pw = ::getpwuid(uid);
-
-  if (pw && pw->pw_dir)
-    return std::filesystem::path{pw->pw_dir};
-
-  return {};
-}
-
-std::filesystem::path session_dir() {
-  auto home = home_dir();
-  if (home.empty())
-    return home;
-
-  // macOS
-  return home / "Library/Caches/com.gulachek.html-forms/session-content";
-}
-
 class catui_connection : public std::enable_shared_from_this<catui_connection>,
                          public http_session,
                          public browser::window_watcher {
@@ -765,8 +746,8 @@ private:
   std::shared_ptr<http_listener> http_;
 
 public:
-  html_forms_server_(unsigned short port) : port_{port}, ioc_{}, browser_{} {
-    session_dir_ = session_dir();
+  html_forms_server_(unsigned short port, const char *session_dir)
+      : port_{port}, session_dir_{session_dir}, ioc_{}, browser_{} {
     auto const address = asio::ip::make_address("127.0.0.1");
     http_ =
         std::make_shared<http_listener>(ioc_, tcp::endpoint{address, port_});
@@ -832,8 +813,9 @@ public:
   }
 };
 
-html_forms_server *html_forms_server_init(unsigned short port) {
-  return new html_forms_server_(port);
+html_forms_server *html_forms_server_init(unsigned short port,
+                                          const char *session_dir) {
+  return new html_forms_server_(port, session_dir);
 }
 
 void html_forms_server_free(html_forms_server *server) {

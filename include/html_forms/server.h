@@ -14,7 +14,8 @@ extern "C" {
 struct html_forms_server_;
 typedef struct html_forms_server_ html_forms_server;
 
-html_forms_server *HTML_API html_forms_server_init(unsigned short port);
+html_forms_server *HTML_API html_forms_server_init(unsigned short port,
+                                                   const char *session_dir);
 void HTML_API html_forms_server_free(html_forms_server *server);
 
 typedef struct {

@@ -125,7 +125,8 @@ int main(int argc, char **argv) {
 
   auto const port = static_cast<unsigned short>(std::atoi(argv[1]));
 
-  html_forms_server *server = html_forms_server_init(port);
+  html_forms_server *server =
+      html_forms_server_init(port, "build/session-content");
   if (!server) {
     std::cerr << "Failed to initialize server on port " << port << std::endl;
     return 1;
