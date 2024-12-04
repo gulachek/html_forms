@@ -8,7 +8,6 @@
 #include "mime_type.hpp"
 #include "my-asio.hpp"
 #include "my-beast.hpp"
-#include "open-url.hpp"
 #include "session_lock.hpp"
 
 #include <algorithm>

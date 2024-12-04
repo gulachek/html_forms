@@ -247,7 +247,6 @@ cli((make) => {
 		'src/server/server.cpp',
 		'src/server/mime_type.cpp',
 		'src/server/http_listener.cpp',
-		'src/server/open-url.cpp',
 		'src/server/my-asio.cpp',
 		'src/server/my-beast.cpp',
 		'src/server/browser.cpp',
