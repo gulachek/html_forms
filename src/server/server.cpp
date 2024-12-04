@@ -16,7 +16,6 @@
 #include <boost/endian/arithmetic.hpp>
 #include <filesystem>
 #include <pwd.h>
-#include <semaphore.h>
 #include <sys/types.h>
 #include <uuid/uuid.h>
 
@@ -110,8 +109,11 @@ public:
 
     docroot_ = all_sessions_dir_ / session_id_;
 
+#define MKDIR std::filesystem::create_directory
+    MKDIR(docroot_);
+
     // TODO nack or fatal_error
-    if (!session_mtx_.open(session_id_)) {
+    if (!session_mtx_.open(docroot_)) {
       std::cerr << "Failed to open session lock" << std::endl;
       return;
     }
@@ -122,8 +124,6 @@ public:
       return;
     }
 
-#define MKDIR std::filesystem::create_directory
-    MKDIR(docroot_);
     std::filesystem::permissions(docroot_, std::filesystem::perms::owner_all);
 
     auto uploads = docroot_ / "uploads";
@@ -764,12 +764,12 @@ public:
       for (const auto &entry :
            std::filesystem::directory_iterator{session_dir_}) {
         const auto &session_path = entry.path();
-        auto session_id = session_path.filename();
 
-        session_lock mtx{session_id};
+        session_lock mtx{session_path};
         if (!mtx.try_lock())
           continue;
 
+        auto session_id = session_path.filename();
         try {
           std::cerr << "Cleaning up inactive session " << session_id
                     << std::endl;

@@ -6,13 +6,13 @@
 
 class session_lock {
 public:
-  session_lock(const std::string &name = "");
+  session_lock(const std::string &path = "");
   ~session_lock();
 
   operator bool() const;
   bool is_open() const;
 
-  bool open(const std::string &name);
+  bool open(const std::string &path);
   bool try_lock();
   void unlock();
 

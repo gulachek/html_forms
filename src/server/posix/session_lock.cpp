@@ -1,52 +1,40 @@
 #include "session_lock.hpp"
 
-#include <semaphore.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
 
 struct session_lock::impl {
-  sem_t *sem;
-  std::string name;
+  int fd = -1;
+  std::string path;
 };
 
-session_lock::session_lock(const std::string &name) {
+session_lock::session_lock(const std::string &path) {
   pimpl_ = std::make_unique<impl>();
-  pimpl_->sem = SEM_FAILED;
 
-  if (!name.empty())
-    open(name);
+  if (!path.empty())
+    open(path);
 }
 
 session_lock::~session_lock() {
-  if (is_open()) {
-    ::sem_close(pimpl_->sem);
-    ::sem_unlink(pimpl_->name.c_str());
-  }
+  if (is_open())
+    ::close(pimpl_->fd);
 }
 
-bool session_lock::is_open() const { return pimpl_->sem != SEM_FAILED; }
+bool session_lock::is_open() const { return pimpl_->fd != -1; }
 session_lock::operator bool() const { return is_open(); }
 
-bool session_lock::open(const std::string &name) {
+bool session_lock::open(const std::string &path) {
   if (is_open())
     return false;
 
-  pimpl_->name = name.size() > 32 ? name.substr(32) : name;
-  pimpl_->sem = ::sem_open(pimpl_->name.c_str(), O_CREAT, S_IRUSR | S_IWUSR, 1);
+  pimpl_->path = path;
+  int fd = pimpl_->fd = ::open(path.c_str(), O_SEARCH);
   return is_open();
 }
 
 bool session_lock::try_lock() {
-  auto sem = pimpl_->sem;
-
-  if (::sem_trywait(sem) == -1) {
-    return false;
-  }
-
-  return true;
+  return ::flock(pimpl_->fd, LOCK_EX | LOCK_NB) != -1;
 }
 
-void session_lock::unlock() {
-  auto sem = pimpl_->sem;
-  ::sem_post(sem);
-}
+void session_lock::unlock() { ::flock(pimpl_->fd, LOCK_UN); }
