@@ -81,6 +81,15 @@ int HTML_API html_connect(html_connection **pcon);
 void HTML_API html_disconnect(html_connection *con);
 
 /**
+ * Get a file descriptor associated with a connection.
+ * @param[in] con The connection
+ * @return The fd the connection is associated with, otherwise -1
+ * @remark This is useful for select loops. Manipulating the underlying file
+ * stream results in undefined behavior.
+ */
+int HTML_API html_connection_fd(html_connection *con);
+
+/**
  * Check to see if a close was requested on the connection
  * @param[in] con The connection
  * @return 1 if a close is requested, 0 otherwise

@@ -109,6 +109,7 @@ int html_connect(html_connection **pcon) {
     goto fail;
 
   con->close_requested = 0;
+  con->fd = -1;
 
   FILE *f = tmpfile();
   if (!f) {
@@ -148,6 +149,14 @@ void html_disconnect(html_connection *con) {
 
   close(con->fd);
   free(con);
+}
+
+int html_connection_fd(html_connection *con) {
+  if (con->fd == -1) {
+    printf_err(con, "Not associated with a valid file descriptor");
+  }
+
+  return con->fd;
 }
 
 int html_close_requested(const html_connection *con) {
