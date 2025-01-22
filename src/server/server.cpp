@@ -729,6 +729,10 @@ private:
       return end_catui();
     }
 
+    if (!ws_) {
+      log() << "Invalid SEND with no websocket connection" << std::endl;
+    }
+
     log() << "SEND: " << ws_send_buf_ << std::endl;
 
     my::async_ws_write(*ws_, asio::buffer(ws_send_buf_),
