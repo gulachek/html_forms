@@ -731,6 +731,7 @@ private:
 
     if (!ws_) {
       log() << "Invalid SEND with no websocket connection" << std::endl;
+      return;
     }
 
     log() << "SEND: " << ws_send_buf_ << std::endl;
