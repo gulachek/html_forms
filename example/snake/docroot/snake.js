@@ -118,6 +118,7 @@ async function main() {
 	fps = new FrameRate(document.getElementById('frame-rate'));
 
 	ws = HtmlForms.connect();
+	ws.binaryType = 'arraybuffer';
 
 	ws.addEventListener('open', () => {
 		ws.send('<sync>');
@@ -133,9 +134,13 @@ async function main() {
 		alert('Disconnected. Please close the window.');
 	});
 
+	const decoder = new TextDecoder();
+
 	ws.addEventListener('message', (e) => {
 		try {
-			lastMsg = JSON.parse(e.data);
+			// data is binary
+			const json = decoder.decode(e.data);
+			lastMsg = JSON.parse(json);
 		} catch (er) {
 			console.error(er);
 			alert('Error parsing JSON message. See console for details.');

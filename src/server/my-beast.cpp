@@ -5,6 +5,7 @@ namespace my {
 std::shared_ptr<ws_stream> make_ws_ptr(tcp::socket &&sock) {
   auto ws = std::make_shared<ws_stream>(std::move(sock));
   ws->set_option(ws::stream_base::timeout::suggested(beast::role_type::server));
+  ws->binary(true); // by default configure raw bytes
   return ws;
 }
 
