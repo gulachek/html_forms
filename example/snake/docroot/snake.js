@@ -15,12 +15,13 @@ const keyMap = {
 let started = false;
 
 function onKeyDown(key) {
-	if (!started) return;
+	if (!started) return false;
 
 	const dir = keyMap[key];
-	if (!dir) return;
+	if (!dir) return false;
 
 	ws.send(dir);
+	return true;
 }
 
 let lastMsg;
@@ -150,7 +151,9 @@ async function main() {
 	});
 
 	window.addEventListener('keydown', (e) => {
-		onKeyDown(e.key);
+		if (onKeyDown(e.key)) {
+			e.preventDefault();
+		}
 	});
 
 	window.addEventListener('resize', () => {
