@@ -8,3 +8,4 @@ conan
 dist
 types
 config.json
+vendor

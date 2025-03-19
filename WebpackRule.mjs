@@ -132,7 +132,7 @@ class WebpackRule {
 	}
 }
 
-export function addWebpack(book, opts, srcPath, outPath, config) {
+export function addWebpack(make, opts, srcPath, outPath, config) {
 	const wp = new WebpackRule(opts, srcPath, outPath, config);
-	book.add(wp);
+	make.add(wp);
 }
