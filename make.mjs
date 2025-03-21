@@ -29,7 +29,14 @@ cli((make) => {
 			libraryTarget: 'cjson',
 		},
 	});
-	const boost = d.findPackage('boost');
+	const boost = d.findPackage({
+		pkgconfig: 'boost-headers',
+		cmake: {
+			packageName: 'Boost',
+			component: 'headers',
+			libraryTarget: 'Boost::headers',
+		},
+	});
 	const libarchive = d.findPackage('libarchive');
 
 	const sqlite3 = d.findPackage('sqlite3');
