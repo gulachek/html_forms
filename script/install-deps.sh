@@ -33,6 +33,27 @@ cmake_build_install
 
 rm "$GTEST_DOWNLOAD"
 
+# zlib
+ZLIB_DOWNLOAD="$VENDORSRC/download-zlib.tgz"
+download \
+	-u "https://zlib.net/zlib-1.3.1.tar.gz" \
+	-c "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23" \
+	-o "$ZLIB_DOWNLOAD"
+
+ZLIB="$VENDORSRC/zlib"
+md "$ZLIB"
+untar -f "$ZLIB_DOWNLOAD" -d "$ZLIB"
+
+cd "$ZLIB"
+cmake -S . -B build \
+	-DZLIB_BUILD_EXAMPLES=OFF \
+	-DCMAKE_INSTALL_PREFIX="$VENDOR" \
+	-DINSTALL_PKGCONFIG_DIR="$VENDOR/lib/pkgconfig"
+cmake_build_install
+
+rm "$ZLIB_DOWNLOAD"
+cd "$SRC"
+
 # cJSON
 CJSON_DOWNLOAD="$VENDORSRC/download-cjson.tgz"
 download \
