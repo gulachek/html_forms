@@ -7,7 +7,6 @@ set -x
 
 SRC="$PWD"
 
-# gtest
 BOOST_DOWNLOAD="$VENDORSRC/download-boost.tgz"
 
 download \
