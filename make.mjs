@@ -39,7 +39,9 @@ cli((make) => {
 	});
 	const libarchive = d.findPackage('libarchive');
 
-	const sqlite3 = d.findPackage('sqlite3');
+	const gtest = d.findPackage('gtest_main');
+
+	//const sqlite3 = d.findPackage('sqlite3');
 
 	const htmlLib = d.addLibrary({
 		name: 'html_forms',
@@ -88,7 +90,7 @@ cli((make) => {
 	const todo = d.addTest({
 		name: 'todo',
 		src: ['example/todo/main.c'],
-		linkTo: [htmlLib, sqlite3],
+		linkTo: [htmlLib /*, sqlite3*/],
 		//`-DDOCROOT_PATH="${make.abs(Path.src('example/todo/docroot'))}"`,
 	});
 
@@ -198,7 +200,7 @@ cli((make) => {
 	const escapeStringTest = d.addTest({
 		name: 'escape_string_test',
 		src: ['test/escape_string_test.cpp'],
-		linkTo: [htmlLib /* test framework */],
+		linkTo: [htmlLib, gtest],
 	});
 
 	const testSock = Path.build('catui.sock');
@@ -239,6 +241,7 @@ cli((make) => {
 		doxygen,
 		serverLib.binary,
 		htmlLib.binary,
+		addCompileCommands(make, d),
 	]);
 });
 
