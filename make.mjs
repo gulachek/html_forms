@@ -194,7 +194,7 @@ cli((make) => {
 	const parseFormTest = d.addTest({
 		name: 'parse_form_test',
 		src: ['test/parse_form_test.cpp'],
-		linkTo: [htmlLib /* test framework */],
+		linkTo: [htmlLib, gtest],
 	});
 
 	const escapeStringTest = d.addTest({
