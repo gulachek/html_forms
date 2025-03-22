@@ -19,21 +19,19 @@ protected:
   }
 };
 
-TEST_F(HtmlEscape, EmptyString) { chk("", ""); }
+#define T(NM, IN, OUT)                                                         \
+  TEST_F(HtmlEscape, NM) { chk(IN, OUT); }
 
-TEST_F(HtmlEscape, NullEscapesToEmptyString) { chk(NULL, ""); }
+T(EmptyString, "", "")
+T(NullEscapesToEmptyString, NULL, "")
+T(SimpleStringUnchanged, "hello", "hello")
+T(Ampersand, "he&ll&&o", "he&amp;ll&amp;&amp;o")
+T(DQuote, "h\"ello\"", "h&quot;ello&quot;")
+T(SQuote, "h'ello'", "h&#039;ello&#039;")
+T(LessThan, "<hello<<", "&lt;hello&lt;&lt;")
+T(GreaterThan, ">hello>>", "&gt;hello&gt;&gt;")
 
-TEST_F(HtmlEscape, SimpleStringUnchanged) { chk("hello", "hello"); }
-
-TEST_F(HtmlEscape, Ampersand) { chk("he&ll&&o", "he&amp;ll&amp;&amp;o"); }
-
-TEST_F(HtmlEscape, DQuote) { chk("h\"ello\"", "h&quot;ello&quot;"); }
-
-TEST_F(HtmlEscape, SQuote) { chk("h'ello'", "h&#039;ello&#039;"); }
-
-TEST_F(HtmlEscape, LessThan) { chk("<hello<<", "&lt;hello&lt;&lt;"); }
-
-TEST_F(HtmlEscape, GreaterThan) { chk(">hello>>", "&gt;hello&gt;&gt;"); }
+#undef T
 
 TEST(SizeChecks, EscapeSizeIncludesNullTerminator) {
   EXPECT_EQ(html_escape_size(""), 1);
