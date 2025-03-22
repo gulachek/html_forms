@@ -192,8 +192,8 @@ cli((make) => {
 	});
 
 	const parseFormTest = d.addTest({
-		name: 'parse-form-test',
-		src: ['test/parse-form-test.cpp'],
+		name: 'parse_form_test',
+		src: ['test/parse_form_test.cpp'],
 		linkTo: [htmlLib /* test framework */],
 	});
 
