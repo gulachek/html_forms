@@ -188,7 +188,7 @@ cli((make) => {
 	const urlTest = d.addTest({
 		name: 'url_test',
 		src: ['test/url_test.cpp'],
-		linkTo: [htmlLib /* test framework */],
+		linkTo: [serverLib, gtest],
 	});
 
 	const parseFormTest = d.addTest({

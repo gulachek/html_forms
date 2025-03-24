@@ -1,9 +1,9 @@
-#define BOOST_TEST_MODULE url_test
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 #include "parse_target.hpp"
 
-struct f {
+struct ParseTargetUrl : public testing::Test {
+protected:
   char session_id_[128];
   char target_path_[256];
 
@@ -14,20 +14,20 @@ struct f {
 
   void test(const char *target, const std::string_view &session_id,
             const std::string_view &normal_path) {
-    BOOST_REQUIRE(parse(target));
-    BOOST_TEST(session_id == session_id_);
-    BOOST_TEST(normal_path == target_path_);
+    ASSERT_TRUE(parse(target));
+    EXPECT_EQ(session_id, session_id_);
+    EXPECT_EQ(normal_path, target_path_);
   }
 };
 
-BOOST_FIXTURE_TEST_CASE(RootDirNotFound, f) { BOOST_TEST(!parse("/")); }
+TEST_F(ParseTargetUrl, RootDirNotFound) { EXPECT_FALSE(parse("/")); }
 
-BOOST_FIXTURE_TEST_CASE(BasicCaseSessionIdAndTarget, f) {
+TEST_F(ParseTargetUrl, BasicCaseSessionIdAndTarget) {
   test("sid/foo/bar.txt", "sid", "/foo/bar.txt");
   test("/sid/foo/bar.txt", "sid", "/foo/bar.txt");
 }
 
-BOOST_FIXTURE_TEST_CASE(AppendsIndexToDir, f) {
+TEST_F(ParseTargetUrl, AppendsIndexToDir) {
   test("session_id/", "session_id", "/index.html");
   test("session_id", "session_id", "/index.html");
   test("/session_id/", "session_id", "/index.html");
@@ -37,23 +37,23 @@ BOOST_FIXTURE_TEST_CASE(AppendsIndexToDir, f) {
   test("session_id/bar/", "session_id", "/bar/index.html");
 }
 
-BOOST_FIXTURE_TEST_CASE(MultipleSlashesAreNormalized, f) {
+TEST_F(ParseTargetUrl, MultipleSlashesAreNormalized) {
   test("///sid//foo/////bar.txt", "sid", "/foo/bar.txt");
 }
 
-BOOST_FIXTURE_TEST_CASE(CurrentDirectoryNormalizedOut, f) {
+TEST_F(ParseTargetUrl, CurrentDirectoryNormalizedOut) {
   test("/sid/././foo/././././bar.txt", "sid", "/foo/bar.txt");
   test("/sid/././foo/./././.", "sid", "/foo/index.html");
 }
 
-BOOST_FIXTURE_TEST_CASE(HiddenFilesNotFound, f) {
-  BOOST_TEST(!parse("/sid/.foo"));
-  BOOST_TEST(!parse("/sid/..foo"));
-  BOOST_TEST(!parse("/sid/...foo"));
-  BOOST_TEST(!parse("/sid/bar/baz/.foo"));
+TEST_F(ParseTargetUrl, HiddenFilesNotFound) {
+  EXPECT_FALSE(parse("/sid/.foo"));
+  EXPECT_FALSE(parse("/sid/..foo"));
+  EXPECT_FALSE(parse("/sid/...foo"));
+  EXPECT_FALSE(parse("/sid/bar/baz/.foo"));
 }
 
-BOOST_FIXTURE_TEST_CASE(ParentDirectoryNormalizedOut, f) {
+TEST_F(ParseTargetUrl, ParentDirectoryNormalizedOut) {
   test("/sid/foo/../bar.txt", "sid", "/bar.txt");
   test("/sid/foo/../../../bar.txt", "sid", "/bar.txt");
   test("/sid/../../../bar.txt", "sid", "/bar.txt");
@@ -61,13 +61,13 @@ BOOST_FIXTURE_TEST_CASE(ParentDirectoryNormalizedOut, f) {
   test("/sid/../bar.txt/../", "sid", "/index.html");
 }
 
-BOOST_FIXTURE_TEST_CASE(MoreDotsInFileNameNotFound, f) {
-  BOOST_TEST(!parse("/sid/..."));
-  BOOST_TEST(!parse("/sid/.../"));
-  BOOST_TEST(!parse("/sid/foo/..../../"));
+TEST_F(ParseTargetUrl, MoreDotsInFileNameNotFound) {
+  EXPECT_FALSE(parse("/sid/..."));
+  EXPECT_FALSE(parse("/sid/.../"));
+  EXPECT_FALSE(parse("/sid/foo/..../../"));
 }
 
-BOOST_FIXTURE_TEST_CASE(VirtualAbsolutePath, f) {
+TEST_F(ParseTargetUrl, VirtualAbsolutePath) {
   test("/sid/~", "sid", "/index.html");
   test("/sid/~/", "sid", "/index.html");
   test("/sid/foo/~/bar.txt", "sid", "/bar.txt");
@@ -75,24 +75,24 @@ BOOST_FIXTURE_TEST_CASE(VirtualAbsolutePath, f) {
   test("/sid/foo/bar/~/baz/~/qux.txt", "sid", "/qux.txt");
 }
 
-BOOST_FIXTURE_TEST_CASE(TildeMisuseNotFound, f) {
-  BOOST_TEST(!parse("/sid/foo~/bar.txt"));
-  BOOST_TEST(!parse("/sid/foo~baz/bar.txt"));
-  BOOST_TEST(!parse("/sid/~baz/bar.txt"));
-  BOOST_TEST(!parse("/sid/foo~"));
-  BOOST_TEST(!parse("/sid/foo~baz"));
-  BOOST_TEST(!parse("/sid/~baz"));
+TEST_F(ParseTargetUrl, TildeMisuseNotFound) {
+  EXPECT_FALSE(parse("/sid/foo~/bar.txt"));
+  EXPECT_FALSE(parse("/sid/foo~baz/bar.txt"));
+  EXPECT_FALSE(parse("/sid/~baz/bar.txt"));
+  EXPECT_FALSE(parse("/sid/foo~"));
+  EXPECT_FALSE(parse("/sid/foo~baz"));
+  EXPECT_FALSE(parse("/sid/~baz"));
 }
 
-BOOST_FIXTURE_TEST_CASE(SpecialCharsInSessionIdOk, f) {
+TEST_F(ParseTargetUrl, SpecialCharsInSessionIdOk) {
   test("/sid~~123/foo/bar.txt", "sid~~123", "/foo/bar.txt");
   test("/sid~/hello/", "sid~", "/hello/index.html");
   test("/..sid./foo/~/bar.txt", "..sid.", "/bar.txt");
   test("...sid/foo/bar/baz/~/qux.txt", "...sid", "/qux.txt");
 }
 
-BOOST_FIXTURE_TEST_CASE(ReservedCharsNotFound, f) {
-  BOOST_TEST(!parse("/sid/bar%20.txt")); // TODO support escape
-  BOOST_TEST(!parse("/sid/bar+.txt"));   // TODO support escape
-  BOOST_TEST(!parse("/sid/bar/hello@ampersand/bar.txt"));
+TEST_F(ParseTargetUrl, ReservedCharsNotFound) {
+  EXPECT_FALSE(parse("/sid/bar%20.txt")); // TODO support escape
+  EXPECT_FALSE(parse("/sid/bar+.txt"));   // TODO support escape
+  EXPECT_FALSE(parse("/sid/bar/hello@ampersand/bar.txt"));
 }
