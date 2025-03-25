@@ -94,7 +94,7 @@ cli((make) => {
 		//`-DDOCROOT_PATH="${make.abs(Path.src('example/todo/docroot'))}"`,
 	});
 
-	const loading = d.addTest({
+	const loading = d.addExecutable({
 		name: 'loading',
 		src: ['example/loading/main.cpp'],
 		linkTo: [htmlLib],
@@ -112,6 +112,8 @@ cli((make) => {
 	const example = Path.build('example');
 	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 	*/
+	const example = Path.build('example');
+	make.add(example, [loading.binary], () => {});
 
 	const formsTs = Path.src('src/server/forms.ts');
 	const browserTs = Path.src('test/browser.ts');
@@ -226,18 +228,12 @@ cli((make) => {
 	});
 
 	make.add('all', [
-		//testServer,
-		//tarball,
-		//tarballArchive,
-		//mimeSwap,
-		//todo,
-		//loading,
-		//snake,
 		browserBundle,
 		doxygen,
 		serverLib.binary,
 		htmlLib.binary,
 		testServer.binary,
+		example,
 		addCompileCommands(make, d),
 	]);
 });

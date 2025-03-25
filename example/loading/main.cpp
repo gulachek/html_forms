@@ -6,6 +6,10 @@
 #include <iostream>
 #include <thread>
 
+#ifndef DOCROOT_PATH
+#define DOCROOT_PATH "example/loading/docroot"
+#endif
+
 using std::chrono::milliseconds;
 
 int app_main(html_connection *con) {
