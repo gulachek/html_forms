@@ -1,12 +1,11 @@
 #include "html_forms/server.h"
 
 #include <catui.h>
+#include <cjson/cJSON.h>
 #include <msgstream.h>
 #include <unixsocket.h>
 
 #include <unistd.h>
-
-#include <boost/json.hpp>
 
 #include <array>
 #include <cassert>
@@ -14,11 +13,13 @@
 #include <string_view>
 #include <thread>
 
-namespace json = boost::json;
-
 int spawn_browser(int *fd_in, int *fd_out);
 
 #define BROWSER_BUF_SIZE 2048
+#define BROWSER_EXE "npx"
+#define BROWSER_ARGS                                                           \
+                                                                               \
+  { "npx", "electron", "build/webpack/browser.cjs" }
 
 class event_listener {
 private:
@@ -32,39 +33,43 @@ private:
     if (ev.type == HTML_FORMS_SERVER_EVENT_OPEN_URL) {
       const auto &open = ev.data.open_url;
       std::cout << "open " << open.url << std::endl;
-      json::object obj;
-      obj["type"] = "open";
-      obj["url"] = open.url;
-      obj["windowId"] = open.window_id;
+      cJSON *obj = cJSON_CreateObject();
+      cJSON_AddStringToObject(obj, "type", "open");
+      cJSON_AddStringToObject(obj, "url", open.url);
+      cJSON_AddNumberToObject(obj, "windowId", open.window_id);
       send(obj);
+      cJSON_free(obj);
     } else if (ev.type == HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW) {
       const auto &close = ev.data.close_win;
       std::cout << "close window " << close.window_id << std::endl;
-      json::object obj;
-      obj["type"] = "close";
-      obj["windowId"] = close.window_id;
+      cJSON *obj = cJSON_CreateObject();
+      cJSON_AddStringToObject(obj, "type", "close");
+      cJSON_AddNumberToObject(obj, "windowId", close.window_id);
       send(obj);
+      cJSON_free(obj);
     } else if (ev.type == HTML_FORMS_SERVER_EVENT_SHOW_ERROR) {
       const auto &err = ev.data.show_err;
       std::cout << "show error " << err.msg << std::endl;
-      json::object obj;
-      obj["type"] = "error";
-      obj["windowId"] = err.window_id;
-      obj["msg"] = err.msg;
+      cJSON *obj = cJSON_CreateObject();
+      cJSON_AddStringToObject(obj, "type", "error");
+      cJSON_AddNumberToObject(obj, "windowId", err.window_id);
+      cJSON_AddStringToObject(obj, "msg", err.msg);
       send(obj);
+      cJSON_free(obj);
     } else {
       std::cerr << "Unknown event type '" << ev.type << '\'' << std::endl;
     }
   }
 
-  void send(const json::object &obj) {
-    std::string msg = json::serialize(obj);
-    if (msg.size() > BROWSER_BUF_SIZE) {
-      std::cerr << "Message too big: " << msg << std::endl;
-      return;
+  void send(cJSON *obj) {
+    char *cmsg = cJSON_Print(obj);
+    size_t sz = strlen(cmsg);
+    if (sz > BROWSER_BUF_SIZE) {
+      std::cerr << "Message too big: " << cmsg << std::endl;
+    } else {
+      msgstream_fd_send(browser_in_, cmsg, BROWSER_BUF_SIZE, sz);
     }
-
-    msgstream_fd_send(browser_in_, msg.data(), BROWSER_BUF_SIZE, msg.size());
+    free(cmsg);
   }
 
 public:
@@ -81,26 +86,32 @@ public:
     std::thread browser_th{[this] {
       std::array<char, BROWSER_BUF_SIZE> buf;
 
-      while (true) {
+      bool ok = true;
+      while (ok) {
         std::size_t msg_size;
         int ret =
             msgstream_fd_recv(browser_out_, buf.data(), buf.size(), &msg_size);
         if (ret) {
           std::cerr << msgstream_errstr(ret) << std::endl;
-          return;
+          break;
         }
 
         std::string_view msg{buf.data(), msg_size};
-        json::object obj = json::parse(msg).as_object();
-        if (obj["type"] == "close") {
-          int window_id = obj["windowId"].as_int64();
+        cJSON *obj = cJSON_ParseWithLength(msg.data(), msg.size());
+        cJSON *typeProp = cJSON_GetObjectItem(obj, "type");
+        char *type = cJSON_GetStringValue(typeProp);
+
+        if (strcmp(type, "close") == 0) {
+
+          cJSON *windowProp = cJSON_GetObjectItem(obj, "windowId");
+          int window_id = (int)cJSON_GetNumberValue(windowProp);
           std::cout << "Requesting to close window " << window_id << std::endl;
           html_forms_server_close_window(html_, window_id);
         } else {
-          std::cerr << "Unknown browser message type: " << obj["type"]
-                    << std::endl;
-          return;
+          std::cerr << "Unknown browser message type: " << type << std::endl;
+          ok = false;
         }
+        cJSON_free(obj);
       }
     }};
 

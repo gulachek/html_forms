@@ -175,14 +175,10 @@ cli((make) => {
 		includeDirs: ['include', 'private'],
 	});
 
-	const testServer = d.addTest({
+	const testServer = d.addExecutable({
 		name: 'test_server',
 		src: ['test/test_server.cpp'],
-		linkTo: [boost, serverLib],
-		/*
-			`-DBROWSER_EXE="npx"`,
-			`-DBROWSER_ARGS={"npx", "electron", "${make.abs(browserBundle)}"}`,
-		 */
+		linkTo: [cjson, serverLib],
 	});
 
 	const urlTest = d.addTest({
@@ -241,6 +237,7 @@ cli((make) => {
 		doxygen,
 		serverLib.binary,
 		htmlLib.binary,
+		testServer.binary,
 		addCompileCommands(make, d),
 	]);
 });
