@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Used by CMake. Needed to avoid (*.o) was built for newer 'macOS' version (13.7) than being linked (13.0)
+export MACOSX_DEPLOYMENT_TARGET=13.0
+
 md() {
 	if [ ! -d "$1" ]; then
 		mkdir "$1"
