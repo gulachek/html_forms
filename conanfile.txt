@@ -1,8 +1,0 @@
-[requires]
-boost/1.83.0
-cjson/1.7.16
-libarchive/3.7.2
-sqlite3/3.44.2
-
-[generators]
-PkgConfigDeps

@@ -1,0 +1,7 @@
+prefix=${pcfiledir}\\..\\..
+includedir=${prefix}\\include
+
+Name: boost-headers
+Version:
+Description: helper pkg-config file for boost
+Cflags: "/I${includedir}"
