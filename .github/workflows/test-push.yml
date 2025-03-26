@@ -32,7 +32,7 @@ jobs:
         with:
           path: vendor
           key: ${{ runner.os }}-boost-${{ hashFiles('script/install-boost.sh', 'script/util.sh') }}
-      - if: ${{ steps.cache-boost.outputs.cache-hit != 'true' }}
+      - if: ${{ steps.restore-boost.outputs.cache-hit != 'true' }}
         name: Report Failure
         run: |
           echo "Boost cache failed to restore"
