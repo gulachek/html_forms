@@ -52,6 +52,16 @@ cmake -S . -B build \
 cmake_build_install
 
 rm "$ZLIB_DOWNLOAD"
+for dylib in "$VENDOR"/lib/libz*.dylib; do
+	if [ -f "$dylib" ]; then
+		rm "$dylib"
+	fi
+done
+for so in "$VENDOR"/lib/libz*.so; do
+	if [ -f "$so" ]; then
+		rm "$so"
+	fi
+done
 cd "$SRC"
 
 # cJSON
