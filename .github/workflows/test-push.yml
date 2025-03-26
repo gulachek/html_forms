@@ -26,18 +26,13 @@ jobs:
       matrix:
         os: [macos-latest]
     steps:
+      - uses: actions/checkout@v4
       - name: Restore Boost
         id: restore-boost
         uses: actions/cache@v4
         with:
           path: vendor
           key: ${{ runner.os }}-boost-${{ hashFiles('script/install-boost.sh', 'script/util.sh') }}
-      - if: ${{ steps.restore-boost.outputs.cache-hit != 'true' }}
-        name: Report Failure
-        run: |
-          echo "Boost cache failed to restore"
-          exit 1
-      - uses: actions/checkout@v4
       - name: Install libarchive
         run: script/install-libarchive.sh
       - name: Install Lighter Dependencies
