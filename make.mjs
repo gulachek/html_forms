@@ -94,16 +94,8 @@ cli((make) => {
 		//`-DDOCROOT_PATH="${make.abs(Path.src('example/todo/docroot'))}"`,
 	});
 
-	const loadingDocroot = Path.src('example/loading/docroot');
-	const loadingConfig = Path.build('example/loading/config.cpp');
-	make.add(loadingConfig, async (args) => {
-		await writeFile(
-			args.abs(loadingConfig),
-			`
-		const char *docroot = "${args.abs(loadingDocroot)}";
-		`,
-			'utf8',
-		);
+	const loadingConfig = makeConfig(make, 'example/loading/config.cpp', {
+		docroot: Path.src('example/loading/docroot'),
 	});
 
 	const loading = d.addExecutable({
@@ -111,6 +103,9 @@ cli((make) => {
 		src: ['example/loading/main.cpp', loadingConfig],
 		linkTo: [htmlLib],
 	});
+
+	const snakeDocroot = Path.src('example/snake/docroot');
+	const snakeConfig = Path.build('example/snake/config.cpp');
 
 	const snake = d.addTest({
 		name: 'snake',
@@ -271,4 +266,23 @@ function bufToCppArray(identifier, buf) {
 	}`);
 
 	return pieces.join('');
+}
+
+function makeConfig(make, configPath, keyVals) {
+	const lines = [];
+	for (const key in keyVals) {
+		let val = keyVals[key];
+		if (Path.isPath(val)) {
+			val = make.abs(val);
+		}
+
+		lines.push(`const char *${key} = "${val}";`);
+	}
+
+	const config = Path.build(configPath);
+	make.add(config, async (args) => {
+		await writeFile(args.abs(config), lines.join('\n'), 'utf8');
+	});
+
+	return config;
 }
