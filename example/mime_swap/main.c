@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+extern const char *docroot;
+
 int override_mimes(html_connection *con);
 
 int main() {
@@ -16,7 +18,7 @@ int main() {
   if (!override_mimes(con))
     goto fail;
 
-  if (!html_upload_dir(con, "/", "./example/mime_swap/docroot")) {
+  if (!html_upload_dir(con, "/", docroot)) {
     fprintf(stderr, "Failed to upload docroot: %s\n", html_errmsg(con));
     goto fail;
   }

@@ -48,9 +48,13 @@ cli((make) => {
 		linkTo: [cjson, catui],
 	});
 
-	const mimeSwap = d.addTest({
+	const mimeConfig = makeConfig(make, 'example/mime_swap/config.c', {
+		docroot: Path.src('example/mime_swap/docroot'),
+	});
+
+	const mimeSwap = d.addExecutable({
 		name: 'mime_swap',
-		src: ['example/mime_swap/main.c'],
+		src: ['example/mime_swap/main.c', mimeConfig],
 		linkTo: [htmlLib],
 	});
 
@@ -120,14 +124,16 @@ cli((make) => {
 		linkTo: [boost, htmlLib],
 	});
 
-	/*
-	const example = Path.build('example');
-	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
-	*/
 	const example = Path.build('example');
 	make.add(
 		example,
-		[loading.binary, snake.binary, tarball.binary, todo.binary],
+		[
+			loading.binary,
+			snake.binary,
+			tarball.binary,
+			todo.binary,
+			mimeSwap.binary,
+		],
 		() => {},
 	);
 
