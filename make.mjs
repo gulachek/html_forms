@@ -41,8 +41,6 @@ cli((make) => {
 
 	const gtest = d.findPackage('gtest_main');
 
-	//const sqlite3 = d.findPackage('sqlite3');
-
 	const htmlLib = d.addLibrary({
 		name: 'html_forms',
 		src: ['src/client/html_forms.c'],
@@ -92,11 +90,14 @@ cli((make) => {
 		linkTo: [htmlLib],
 	});
 
-	const todo = d.addTest({
+	const todoConfig = makeConfig(make, 'example/todo/config.c', {
+		docroot: Path.src('example/todo/docroot'),
+	});
+
+	const todo = d.addExecutable({
 		name: 'todo',
-		src: ['example/todo/main.c'],
-		linkTo: [htmlLib /*, sqlite3*/],
-		//`-DDOCROOT_PATH="${make.abs(Path.src('example/todo/docroot'))}"`,
+		src: ['example/todo/main.c', todoConfig],
+		linkTo: [htmlLib],
 	});
 
 	const loadingConfig = makeConfig(make, 'example/loading/config.cpp', {
@@ -124,7 +125,11 @@ cli((make) => {
 	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 	*/
 	const example = Path.build('example');
-	make.add(example, [loading.binary, snake.binary, tarball.binary], () => {});
+	make.add(
+		example,
+		[loading.binary, snake.binary, tarball.binary, todo.binary],
+		() => {},
+	);
 
 	const formsTs = Path.src('src/server/forms.ts');
 	const browserTs = Path.src('test/browser.ts');

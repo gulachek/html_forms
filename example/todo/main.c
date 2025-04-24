@@ -1,10 +1,24 @@
 #include <html_forms.h>
 
-#include <sqlite3.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
-int loop(sqlite3 *db, html_connection *con);
+extern const char *docroot;
+
+struct task {
+  int id;
+  int is_null;
+  char title[64];
+  char description[256];
+  int priority;
+  char due_date[16];
+};
+
+#define MAX_TASKS 16
+static struct task db[MAX_TASKS];
+
+int loop(html_connection *con);
 
 int hprintf(html_connection *con, const char *fmt, ...) {
   static char dummy;
@@ -37,12 +51,6 @@ int hprintf(html_connection *con, const char *fmt, ...) {
 }
 
 int main() {
-  sqlite3 *db;
-  if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
-    fprintf(stderr, "Failed to open database: %s\n", sqlite3_errmsg(db));
-    return 1;
-  }
-
   html_connection *con;
 
   if (!html_connect(&con)) {
@@ -51,10 +59,9 @@ int main() {
     return 1;
   }
 
-  int ret = loop(db, con);
+  int ret = loop(con);
 
   html_disconnect(con);
-  sqlite3_close(db);
   return ret;
 }
 
@@ -91,7 +98,7 @@ void print_header(html_connection *con) {
 
 void print_footer(html_connection *con) { hprintf(con, "</body></html>"); }
 
-int view_tasks(sqlite3 *db, html_connection *con, html_form **pform) {
+int view_tasks(html_connection *con, html_form **pform) {
   if (!html_upload_stream_open(con, "/view.html"))
     return 0;
 
@@ -102,33 +109,25 @@ int view_tasks(sqlite3 *db, html_connection *con, html_form **pform) {
                "</form>"
                "<ul class=\"todo-items\">");
 
-  sqlite3_stmt *select;
-  const char *sql = "SELECT id, title, priority, due_date "
-                    "FROM tasks ORDER BY LENGTH(due_date) DESC, due_date ASC, "
-                    "priority DESC";
-
-  if (sqlite3_prepare_v2(db, sql, -1, &select, NULL)) {
-    fprintf(stderr, "Failed to prepare SELECT: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
   char esc_title[1024];
   char esc_date[11]; // really should be yyyy-mm-dd (10, no escape)
 
-  while (sqlite3_step(select) == SQLITE_ROW) {
-    int id = sqlite3_column_int(select, 0);
-    const unsigned char *title = sqlite3_column_text(select, 1);
-    int priority = sqlite3_column_int(select, 2);
-    const unsigned char *due_date = sqlite3_column_text(select, 3);
+  for (int i = 0; i < MAX_TASKS; ++i) {
+    const struct task *t = &db[i];
+    if (t->is_null)
+      continue;
 
-    if (html_escape(esc_title, sizeof(esc_title), (const char *)title) >
-        sizeof(esc_title)) {
+    int id = i;
+    const char *title = t->title;
+    int priority = t->priority;
+    const char *due_date = t->due_date;
+
+    if (html_escape(esc_title, sizeof(esc_title), title) > sizeof(esc_title)) {
       fprintf(stderr, "Title too big: %s\n", title);
       goto fail;
     }
 
-    if (html_escape(esc_date, sizeof(esc_date), (const char *)due_date) >
-        sizeof(esc_date)) {
+    if (html_escape(esc_date, sizeof(esc_date), due_date) > sizeof(esc_date)) {
       fprintf(stderr, "Date too big: %s\n", due_date);
       goto fail;
     }
@@ -164,14 +163,6 @@ int view_tasks(sqlite3 *db, html_connection *con, html_form **pform) {
             id, bullet_href, esc_title, date_class, esc_date);
   }
 
-  int ec = sqlite3_finalize(select);
-  select = NULL;
-
-  if (ec) {
-    fprintf(stderr, "Failed to finalize SELECT: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
   hprintf(con, "</ul>");
   print_footer(con);
 
@@ -195,34 +186,21 @@ success:
   return 1;
 
 fail:
-  sqlite3_finalize(select);
   return 0;
 }
 
-int edit_task(int task, sqlite3 *db, html_connection *con, html_form **pform) {
-  sqlite3_stmt *stmt;
-  const char *sql = "SELECT title, description, priority, due_date "
-                    "FROM tasks WHERE id = ?";
+int edit_task(int task, html_connection *con, html_form **pform) {
+  if (task < 0 || task >= MAX_TASKS)
+    return 0;
 
-  if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL)) {
-    fprintf(stderr, "Failed to prepare SELECT: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
+  struct task *t = &db[task];
+  if (t->is_null)
+    return 0;
 
-  if (sqlite3_bind_int(stmt, 1, task)) {
-    fprintf(stderr, "Failed to bind task: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  if (sqlite3_step(stmt) != SQLITE_ROW) {
-    fprintf(stderr, "Failed to execute SELECT: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  const unsigned char *title = sqlite3_column_text(stmt, 0);
-  const unsigned char *desc = sqlite3_column_text(stmt, 1);
-  int priority = sqlite3_column_int(stmt, 2);
-  const unsigned char *due_date = sqlite3_column_text(stmt, 3);
+  const char *title = t->title;
+  const char *desc = t->description;
+  int priority = t->priority;
+  const char *due_date = t->due_date;
 
   if (!html_upload_stream_open(con, "/edit.html"))
     return 0;
@@ -231,20 +209,17 @@ int edit_task(int task, sqlite3 *db, html_connection *con, html_form **pform) {
   char esc_desc[4096];
   char esc_date[512];
 
-  if (html_escape(esc_title, sizeof(esc_title), (const char *)title) >
-      sizeof(esc_title)) {
+  if (html_escape(esc_title, sizeof(esc_title), title) > sizeof(esc_title)) {
     fprintf(stderr, "Title too big: %s\n", title);
     goto fail;
   }
 
-  if (html_escape(esc_desc, sizeof(esc_desc), (const char *)desc) >
-      sizeof(esc_desc)) {
+  if (html_escape(esc_desc, sizeof(esc_desc), desc) > sizeof(esc_desc)) {
     fprintf(stderr, "Description too big: %s\n", desc);
     goto fail;
   }
 
-  if (html_escape(esc_date, sizeof(esc_date), (const char *)due_date) >
-      sizeof(esc_date)) {
+  if (html_escape(esc_date, sizeof(esc_date), due_date) > sizeof(esc_date)) {
     fprintf(stderr, "Due date too big: %s\n", due_date);
     goto fail;
   }
@@ -294,14 +269,6 @@ int edit_task(int task, sqlite3 *db, html_connection *con, html_form **pform) {
 
   print_footer(con);
 
-  int ec = sqlite3_finalize(stmt);
-  stmt = NULL;
-
-  if (ec) {
-    fprintf(stderr, "Failed to finalize SELECT: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
   if (!html_upload_stream_close(con)) {
     fprintf(stderr, "Failed to upload /edit.html: %s\n", html_errmsg(con));
     goto fail;
@@ -324,131 +291,89 @@ int edit_task(int task, sqlite3 *db, html_connection *con, html_form **pform) {
     goto fail;
   }
 
-  const char *saveSql = "UPDATE tasks SET title=?"
-                        " ,description=?"
-                        " ,priority=?"
-                        " ,due_date=?"
-                        " WHERE id=?";
-
-  if (sqlite3_prepare_v2(db, saveSql, -1, &stmt, NULL)) {
-    fprintf(stderr, "Failed to prepare UPDATE: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
   const char *form_title = html_form_value_of(*pform, "title");
-  if (sqlite3_bind_text(stmt, 1, form_title, -1, SQLITE_STATIC)) {
-    fprintf(stderr, "Failed to bind title: %s\n", sqlite3_errmsg(db));
-    goto fail;
+  if (form_title) {
+    strlcpy(t->title, form_title, sizeof(t->title));
+  } else {
+    t->title[0] = '\0';
   }
 
   const char *form_desc = html_form_value_of(*pform, "description");
-  if (sqlite3_bind_text(stmt, 2, form_desc, -1, SQLITE_STATIC)) {
-    fprintf(stderr, "Failed to bind description: %s\n", sqlite3_errmsg(db));
-    goto fail;
+  if (form_desc) {
+    strlcpy(t->description, form_desc, sizeof(t->description));
+  } else {
+    t->description[0] = '\0';
   }
 
   int form_priority = atoi(html_form_value_of(*pform, "priority"));
-  if (sqlite3_bind_int(stmt, 3, form_priority)) {
-    fprintf(stderr, "Failed to bind priority: %s\n", sqlite3_errmsg(db));
-    goto fail;
+  if (0 <= form_priority && form_priority <= 2) {
+    t->priority = form_priority;
   }
 
   const char *form_date = html_form_value_of(*pform, "due-date");
-  if (sqlite3_bind_text(stmt, 4, form_date, -1, SQLITE_STATIC)) {
-    fprintf(stderr, "Failed to bind description: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  if (sqlite3_bind_int(stmt, 5, task)) {
-    fprintf(stderr, "Failed to bind task: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  sqlite3_step(stmt);
-  ec = sqlite3_finalize(stmt);
-  stmt = NULL;
-
-  if (ec) {
-    fprintf(stderr, "Failed to finalize UPDATE: %s\n", sqlite3_errmsg(db));
-    goto fail;
+  if (form_date) {
+    strlcpy(t->due_date, form_date, sizeof(t->due_date));
+  } else {
+    t->due_date[0] = '\0';
   }
 
 success:
   return 1;
 
 fail:
-  sqlite3_finalize(stmt);
   return 0;
 }
 
-int init_db(sqlite3 *db) {
-  const char *sql = "CREATE TABLE tasks ("
-                    " id INTEGER PRIMARY KEY,"
-                    " title TEXT,"
-                    " description TEXT,"
-                    " priority INTEGER DEFAULT 1,"
-                    " due_date TEXT"
-                    ");"
-                    "INSERT INTO tasks (title) VALUES (\"Test\");";
+void init_task(struct task *t) {
+  t->is_null = 0;
+  t->title[0] = '\0';
+  t->description[0] = '\0';
+  t->priority = 1;
+  t->due_date[0] = '\0';
+}
 
-  char *errmsg;
-  if (sqlite3_exec(db, sql, NULL, NULL, &errmsg) != SQLITE_OK) {
-    fprintf(stderr, "Error initializing database: %s\n", errmsg);
-    return 0;
+int init_db() {
+
+  for (int i = 0; i < MAX_TASKS; ++i) {
+    db[i].id = i;
+    db[i].is_null = 1;
   }
+
+  init_task(&db[0]);
+  strcpy(db[0].title, "Test");
 
   return 1;
 }
 
-int create_task(sqlite3 *db, int *pid) {
-  char *errmsg;
-  if (sqlite3_exec(db, "INSERT INTO tasks DEFAULT VALUES", NULL, NULL,
-                   &errmsg)) {
-    fprintf(stderr, "Failed to create task: %s\n", errmsg);
-    return 0;
+int create_task(int *pid) {
+  for (int i = 0; i < MAX_TASKS; ++i) {
+    struct task *t = &db[i];
+    if (t->is_null) {
+      init_task(t);
+      *pid = i;
+      return 1;
+    }
   }
 
-  *pid = sqlite3_last_insert_rowid(db);
-  return 1;
-}
-
-int delete_task(sqlite3 *db, int task) {
-  sqlite3_stmt *stmt;
-  const char *sql = "DELETE FROM tasks WHERE id = ?";
-
-  if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL)) {
-    fprintf(stderr, "Failed to prepare DELETE: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  if (sqlite3_bind_int(stmt, 1, task)) {
-    fprintf(stderr, "Failed to bind task: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
-  }
-
-  int ec = sqlite3_finalize(stmt);
-  stmt = NULL;
-
-  if (ec) {
-    fprintf(stderr, "Failed to finalize DELETE: %s\n", sqlite3_errmsg(db));
-    goto fail;
-  }
-
-  return 1;
-
-fail:
-  sqlite3_finalize(stmt);
   return 0;
 }
 
-int loop(sqlite3 *db, html_connection *con) {
-  if (!init_db(db))
+int delete_task(int task) {
+  if (task < 0 || task >= MAX_TASKS)
+    return 0;
+
+  if (db[task].is_null)
+    return 0;
+
+  db[task].is_null = 1;
+  return 1;
+}
+
+int loop(html_connection *con) {
+  if (!init_db())
     return 1;
 
-  if (!html_upload_dir(con, "/", DOCROOT_PATH)) {
+  if (!html_upload_dir(con, "/", docroot)) {
     fprintf(stderr, "Failed to upload docroot: %s\n", html_errmsg(con));
     return 1;
   }
@@ -459,7 +384,7 @@ int loop(sqlite3 *db, html_connection *con) {
 
   while (1) {
     if (strcmp(action, "view") == 0) {
-      if (!view_tasks(db, con, &form)) {
+      if (!view_tasks(con, &form)) {
         return 1;
       }
 
@@ -470,18 +395,18 @@ int loop(sqlite3 *db, html_connection *con) {
       }
 
     } else if (strcmp(action, "add") == 0) {
-      if (!create_task(db, &selected_task))
+      if (!create_task(&selected_task))
         return 1;
 
       action = "edit";
     } else if (strcmp(action, "edit") == 0) {
-      if (!edit_task(selected_task, db, con, &form)) {
+      if (!edit_task(selected_task, con, &form)) {
         return 1;
       }
 
       action = "view";
     } else if (strcmp(action, "delete") == 0) {
-      if (!delete_task(db, selected_task))
+      if (!delete_task(selected_task))
         return 1;
 
       action = "view";
