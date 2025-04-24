@@ -1,8 +1,7 @@
 #include <html_forms.h>
 
-#include <boost/json.hpp>
-
 #include <chrono>
+#include <cjson/cJSON.h>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -15,9 +14,9 @@
 #include <valarray>
 #include <vector>
 
-namespace json = boost::json;
-
 typedef std::valarray<int> vec;
+
+extern const char *docroot;
 
 std::ostream &operator<<(std::ostream &os, const vec &v) {
   os << '[';
@@ -85,7 +84,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (!html_upload_dir(con, "/", DOCROOT_PATH)) {
+  if (!html_upload_dir(con, "/", docroot)) {
     std::cerr << "Failed to upload docroot: " << html_errmsg(con) << std::endl;
     return 1;
   }
@@ -241,24 +240,33 @@ bool game::slither() noexcept {
 }
 
 void game::render() noexcept {
-  json::object output;
-
-  // body
-  json::array snake;
+  cJSON *obj = cJSON_CreateObject();
+  cJSON *snake = cJSON_CreateArray();
   for (const auto &elem : body_) {
-    json::array segment = {elem[0], elem[1]};
-    snake.emplace_back(std::move(segment));
+    cJSON *x = cJSON_CreateNumber(elem[0]);
+    cJSON *y = cJSON_CreateNumber(elem[1]);
+    cJSON *segment = cJSON_CreateArray();
+    cJSON_AddItemToArray(segment, x);
+    cJSON_AddItemToArray(segment, y);
+    cJSON_AddItemToArray(snake, segment);
   }
 
-  output["snake"] = std::move(snake);
+  cJSON_AddItemToObject(obj, "snake", snake);
 
-  // fruit
-  output["fruit"] = json::array{fruit_[0], fruit_[1]};
+  cJSON *fruit = cJSON_CreateArray();
+  cJSON *fx = cJSON_CreateNumber(fruit_[0]);
+  cJSON *fy = cJSON_CreateNumber(fruit_[1]);
+  cJSON_AddItemToArray(fruit, fx);
+  cJSON_AddItemToArray(fruit, fy);
+  cJSON_AddItemToObject(obj, "fruit", fruit);
 
-  auto msg = json::serialize(output);
-  if (!html_send(con_, msg.data(), msg.size())) {
+  const char *msg = cJSON_Print(obj);
+
+  if (!html_send(con_, msg, strlen(msg))) {
     std::cerr << "Failed to send message: " << html_errmsg(con_) << std::endl;
   }
+  free((void *)msg);
+  cJSON_free(obj);
 }
 
 void game::generate_fruit() noexcept {

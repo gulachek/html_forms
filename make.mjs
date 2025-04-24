@@ -104,14 +104,14 @@ cli((make) => {
 		linkTo: [htmlLib],
 	});
 
-	const snakeDocroot = Path.src('example/snake/docroot');
-	const snakeConfig = Path.build('example/snake/config.cpp');
+	const snakeConfig = makeConfig(make, 'example/snake/config.cpp', {
+		docroot: Path.src('example/snake/docroot'),
+	});
 
-	const snake = d.addTest({
+	const snake = d.addExecutable({
 		name: 'snake',
-		src: ['example/snake/main.cpp'],
+		src: ['example/snake/main.cpp', snakeConfig],
 		linkTo: [boost, htmlLib],
-		// `-DDOCROOT_PATH="${make.abs(Path.src('example/snake/docroot'))}"`,
 	});
 
 	/*
@@ -119,7 +119,7 @@ cli((make) => {
 	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 	*/
 	const example = Path.build('example');
-	make.add(example, [loading.binary], () => {});
+	make.add(example, [loading.binary, snake.binary], () => {});
 
 	const formsTs = Path.src('src/server/forms.ts');
 	const browserTs = Path.src('test/browser.ts');
