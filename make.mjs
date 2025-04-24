@@ -94,11 +94,22 @@ cli((make) => {
 		//`-DDOCROOT_PATH="${make.abs(Path.src('example/todo/docroot'))}"`,
 	});
 
+	const loadingDocroot = Path.src('example/loading/docroot');
+	const loadingConfig = Path.build('example/loading/config.cpp');
+	make.add(loadingConfig, async (args) => {
+		await writeFile(
+			args.abs(loadingConfig),
+			`
+		const char *docroot = "${args.abs(loadingDocroot)}";
+		`,
+			'utf8',
+		);
+	});
+
 	const loading = d.addExecutable({
 		name: 'loading',
-		src: ['example/loading/main.cpp'],
+		src: ['example/loading/main.cpp', loadingConfig],
 		linkTo: [htmlLib],
-		// `-DDOCROOT_PATH="${make.abs(Path.src('example/loading/docroot'))}"`,
 	});
 
 	const snake = d.addTest({

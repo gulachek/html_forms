@@ -6,14 +6,12 @@
 #include <iostream>
 #include <thread>
 
-#ifndef DOCROOT_PATH
-#define DOCROOT_PATH "example/loading/docroot"
-#endif
+extern const char *docroot;
 
 using std::chrono::milliseconds;
 
 int app_main(html_connection *con) {
-  if (!html_upload_dir(con, "/", DOCROOT_PATH)) {
+  if (!html_upload_dir(con, "/", docroot)) {
     std::cerr << "Failed to upload docroot: " << html_errmsg(con) << std::endl;
     return 1;
   }
