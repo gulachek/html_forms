@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+extern const char *tarball_path;
+
 int main() {
   html_connection *con;
 
@@ -11,7 +13,7 @@ int main() {
     return 1;
   }
 
-  if (!html_upload_archive(con, "/", TARBALL_PATH)) {
+  if (!html_upload_archive(con, "/", tarball_path)) {
     fprintf(stderr, "Failed to upload docroot archive: %s\n", html_errmsg(con));
     goto fail;
   }

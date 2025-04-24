@@ -80,11 +80,16 @@ cli((make) => {
 		]);
 	});
 
-	const tarball = d.addTest({
+	const tarballConfig = makeConfig(make, 'example/tarball/config.c', {
+		tarball_path: tarballArchive,
+	});
+
+	make.add(tarballConfig, [tarballArchive]);
+
+	const tarball = d.addExecutable({
 		name: 'tarball',
-		src: ['example/tarball/main.c'],
+		src: ['example/tarball/main.c', tarballConfig],
 		linkTo: [htmlLib],
-		//[`-DTARBALL_PATH="${make.abs(tarballArchive)}"`],
 	});
 
 	const todo = d.addTest({
@@ -119,7 +124,7 @@ cli((make) => {
 	make.add(example, [mimeSwap, tarball, tarballArchive, todo, snake, loading]);
 	*/
 	const example = Path.build('example');
-	make.add(example, [loading.binary, snake.binary], () => {});
+	make.add(example, [loading.binary, snake.binary, tarball.binary], () => {});
 
 	const formsTs = Path.src('src/server/forms.ts');
 	const browserTs = Path.src('test/browser.ts');
