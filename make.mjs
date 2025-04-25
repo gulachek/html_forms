@@ -52,7 +52,7 @@ cli((make) => {
 		docroot: Path.src('example/mime_swap/docroot'),
 	});
 
-	const mimeSwap = d.addExecutable({
+	const mimeSwap = d.addTest({
 		name: 'mime_swap',
 		src: ['example/mime_swap/main.c', mimeConfig],
 		linkTo: [htmlLib],
@@ -88,7 +88,7 @@ cli((make) => {
 
 	make.add(tarballConfig, [tarballArchive]);
 
-	const tarball = d.addExecutable({
+	const tarball = d.addTest({
 		name: 'tarball',
 		src: ['example/tarball/main.c', tarballConfig],
 		linkTo: [htmlLib],
@@ -98,7 +98,7 @@ cli((make) => {
 		docroot: Path.src('example/todo/docroot'),
 	});
 
-	const todo = d.addExecutable({
+	const todo = d.addTest({
 		name: 'todo',
 		src: ['example/todo/main.c', todoConfig],
 		linkTo: [htmlLib],
@@ -108,7 +108,7 @@ cli((make) => {
 		docroot: Path.src('example/loading/docroot'),
 	});
 
-	const loading = d.addExecutable({
+	const loading = d.addTest({
 		name: 'loading',
 		src: ['example/loading/main.cpp', loadingConfig],
 		linkTo: [htmlLib],
@@ -118,7 +118,7 @@ cli((make) => {
 		docroot: Path.src('example/snake/docroot'),
 	});
 
-	const snake = d.addExecutable({
+	const snake = d.addTest({
 		name: 'snake',
 		src: ['example/snake/main.cpp', snakeConfig],
 		linkTo: [boost, htmlLib],
@@ -199,7 +199,7 @@ cli((make) => {
 		includeDirs: ['include', 'private'],
 	});
 
-	const testServer = d.addExecutable({
+	const testServer = d.addTest({
 		name: 'test_server',
 		src: ['test/test_server.cpp'],
 		linkTo: [cjson, serverLib],
