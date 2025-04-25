@@ -17,21 +17,6 @@ cli((make) => {
 	const { htmlLib, distClient, example } = makeClient(make);
 	const { serverLib, distServer, testServer } = makeServer(make, htmlLib);
 
-	const testSock = Path.build('catui.sock');
-	const catuiDir = Path.build('catui');
-	const contentDir = Path.src('test/content');
-
-	const formsTest = distClient.addTest({
-		name: 'forms_test',
-		src: ['test/forms_test.cpp'],
-		linkTo: [htmlLib /* test framework */],
-		/*
-						CATUI_ADDRESS: testSock,
-						CATUI_DIR: catuiDir,
-						CONTENT_DIR: contentDir,
-		 */
-	});
-
 	const doxygen = Path.build('docs/html/index.html');
 	make.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
 		return args.spawn('doxygen');
@@ -268,7 +253,18 @@ function makeServer(make, htmlLib) {
 		linkTo: [serverLib, gtest],
 	});
 
-	make.add('test', [urlTest.run], () => {});
+	const formsTestConfig = makeConfig(make, 'test/forms_test_config.cpp', {
+		test_scratch_dir: Path.build('.scratch'),
+		content_dir: Path.src('test/content'),
+	});
+
+	const formsTest = d.addTest({
+		name: 'forms_test',
+		src: ['test/forms_test.cpp', formsTestConfig],
+		linkTo: [htmlLib, serverLib, gtest, boost],
+	});
+
+	make.add('test', [urlTest.run, formsTest.run], () => {});
 
 	return { serverLib, distServer: d, testServer };
 }

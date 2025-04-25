@@ -1,351 +1,217 @@
-#define BOOST_TEST_MODULE forms_test
-#include <boost/test/unit_test.hpp>
-#include <cstdlib>
+#include <gtest/gtest.h>
 
-#include <cerrno>
-#include <chrono>
-#include <csignal>
-#include <filesystem>
-#include <fstream>
-#include <thread>
+#include <catui.h>
+#include <html_forms.h>
+#include <html_forms/server.h>
+#include <msgstream.h>
+#include <unixsocket.h>
 
 #include <unistd.h>
 
-#include "html_connection.h"
-#include "html_forms.h"
-#include "html_forms/encoding.h"
+#include <chrono>
+#include <condition_variable>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
-void replace(std::string &s, const std::string_view &search,
-             const std::string_view &replace) {
-  auto i = s.find(search);
-  if (i == std::string::npos)
-    throw std::logic_error{"Failed to find search expression"};
+#define LOG 0
 
-  s.replace(i, search.size(), replace);
+std::mutex log_mtx_;
+
+void log(const std::string &s) {
+  if (LOG) {
+    std::unique_lock lck{log_mtx_};
+    std::cerr << s << std::endl;
+  }
 }
 
-struct server {
-  pid_t catuid_pid_;
-  html_connection *con_ = nullptr;
+namespace fs = std::filesystem;
 
+extern const char *test_scratch_dir;
+
+template <typename Duration> class timer {
+  Duration d_;
+  std::chrono::system_clock::time_point start_;
+
+public:
+  timer(Duration d) : d_{d} { start_ = std::chrono::system_clock::now(); }
+
+  bool expired() {
+    auto now = std::chrono::system_clock::now();
+    return (now - start_) > d_;
+  }
+};
+
+class server {
+  fs::path scratch_;
+  fs::path catui_address_;
+  int catui_server_;
+
+  fs::path session_dir_;
+  html_forms_server *html_server_;
+  std::thread server_thread_;
+
+  int client_fd_;
+
+  std::queue<html_forms_server_event> events_;
+  std::mutex evt_mtx_;
+  std::condition_variable evt_has_data_;
+
+  static void evt_callback(const html_forms_server_event *evt, void *ctx) {
+    static_cast<server *>(ctx)->on_event(evt);
+  }
+
+  void on_event(const html_forms_server_event *evt) {
+    log("queueing server event");
+    std::unique_lock lck{evt_mtx_};
+    events_.emplace(std::move(*evt));
+    evt_has_data_.notify_one();
+  }
+
+public:
   server() {
-    ::unlink(CATUI_ADDRESS);
+    scratch_ = fs::path{test_scratch_dir};
 
-    const char *catuid = std::getenv("CATUID");
-    if (!catuid) {
-      BOOST_FAIL("CATUID env variable not defined");
-      return;
+    if (fs::exists(scratch_)) {
+      log("removing " + scratch_.string());
+      fs::remove_all(scratch_);
     }
 
-    ::setenv("CATUI_ADDRESS", CATUI_ADDRESS, 1);
+    log("creating " + scratch_.string());
+    fs::create_directories(scratch_);
 
-    auto ret = ::fork();
-    if (ret == -1) {
-      BOOST_FAIL(::strerror(errno));
-      return;
-    } else if (ret == 0) {
-      ::execl(catuid, catuid, "-s", CATUI_ADDRESS, "-p", CATUI_DIR,
-              (const char *)NULL);
-      std::perror("execl");
-      std::abort();
-    } else {
-      catuid_pid_ = ret;
-    }
+    catui_address_ = scratch_ / "catui.sock";
+    setenv("CATUI_ADDRESS", catui_address_.c_str(), 1);
 
-    bool connected = false;
-    for (int i = 0; i < 100; ++i) {
-      if (html_connect(&con_)) {
-        connected = true;
-        break;
-      }
+    catui_server_ = unix_socket();
+    assert(catui_server_ >= 0);
 
-      std::cerr << "Connection attempt " << i << std::endl;
-      std::chrono::milliseconds ms{10};
-      std::this_thread::sleep_for(ms);
-    }
+    assert(unix_bind(catui_server_, catui_address_.c_str()) == 0);
 
-    if (!connected) {
-      std::ostringstream os;
-      os << "Failed to connect to catuid " << html_errmsg(con_);
-      BOOST_FAIL(os.str());
-    }
+    assert(unix_listen(catui_server_, 8) == 0);
 
-    html_upload_stream_open(con_, "/index.html");
-    const char *content = "<h1>Testing in progress</h1>";
-    html_upload_stream_write(con_, content, strlen(content));
-    html_upload_stream_close(con_);
-    html_navigate(con_, "/index.html");
+    session_dir_ = scratch_ / "sessions";
+    log("creating " + session_dir_.string());
+    fs::create_directories(session_dir_);
+
+    log("initializing html server");
+    html_server_ = html_forms_server_init(9876, session_dir_.c_str());
+    assert(html_server_);
+
+    int ret =
+        html_forms_server_set_event_callback(html_server_, &evt_callback, this);
+    assert(ret);
+
+    log("Spawning html server thread");
+    server_thread_ =
+        std::thread{[this] { html_forms_server_run(html_server_); }};
   }
 
   ~server() {
+    log("Stopping html server");
+    html_forms_server_stop(html_server_);
+
+    log("Joining server thread");
+    server_thread_.join();
+
+    log("freeing server");
+    html_forms_server_free(html_server_);
+
+    log("closing catui server socket");
+    ::close(catui_server_);
+
+    log("deleting " + scratch_.string());
+    fs::remove_all(scratch_);
+  };
+
+  std::promise<bool> accept_client() {
+    std::promise<bool> p;
+
+    std::thread t{[this, &p] {
+      log("accepting catui client");
+      client_fd_ = unix_accept(catui_server_);
+      assert(client_fd_ >= 0);
+
+      char connect_buf[CATUI_CONNECT_SIZE];
+      size_t msg_size;
+      log("receiving catui connect request");
+      int ec = msgstream_fd_recv(client_fd_, connect_buf, CATUI_CONNECT_SIZE,
+                                 &msg_size);
+      assert(ec == MSGSTREAM_OK);
+
+      catui_connect_request req;
+      log("decoding catui connect request");
+      assert(catui_decode_connect(connect_buf, msg_size, &req));
+
+      std::string proto{req.protocol};
+      assert(proto == "com.gulachek.html-forms");
+
+      log("connecting accepted fd to html server");
+      html_forms_server_connect(html_server_, client_fd_);
+
+      p.set_value(true);
+    }};
+
+    t.detach();
+    return p;
+  }
+
+  void pop_event(html_forms_server_event &evt) {
+    log("waiting for server event");
+    std::unique_lock lck{evt_mtx_};
+    timer t{std::chrono::milliseconds(1000)};
+    while (events_.empty() && !t.expired()) {
+      evt_has_data_.wait_for(lck, std::chrono::milliseconds{200});
+    }
+
+    if (t.expired()) {
+      log("timer expired waiting for server event");
+      assert(!t.expired());
+    }
+
+    log("popping event");
+    evt = std::move(events_.front());
+    events_.pop();
+  }
+};
+
+class client {
+  html_connection *con_;
+
+public:
+  client(server &s) {
+    log("starting server's accept_client");
+    auto accepted = s.accept_client();
+    log("calling html_connect");
+    html_connect(&con_);
+    log("waiting for server to finish accept");
+    assert(accepted.get_future().get());
+    log("server done accepting");
+  }
+
+  ~client() {
+    log("html_disconnect");
     html_disconnect(con_);
-    ::kill(catuid_pid_, SIGINT);
-    ::wait(nullptr);
+  }
+
+  void navigate(const char *url) {
+    log("navigating to " + std::string{url});
+    int rc = html_navigate(con_, url);
+    ASSERT_TRUE(rc);
   }
 };
 
-BOOST_TEST_GLOBAL_FIXTURE(server);
+TEST(HtmlForms, NavigateTriggersServerEvent) {
+  server s;
+  client c{s};
+  html_forms_server_event evt;
 
-struct f {
-  html_connection *con_ = nullptr;
-  std::filesystem::path content_dir_;
-
-  f() {
-    if (!html_connect(&con_)) {
-      BOOST_FAIL("Failed to connect to server");
-      return;
-    }
-
-    content_dir_ = std::filesystem::path{CONTENT_DIR};
-  }
-
-  void render(const std::string &s, const std::string &url = "/index.html") {
-    if (!html_upload_stream_open(con_, url.c_str())) {
-      BOOST_FAIL("Failed to open upload stream: " << html_errmsg(con_));
-    }
-
-    if (!html_upload_stream_write(con_, s.data(), s.size())) {
-      BOOST_FAIL("Failed to upload contents: " << html_errmsg(con_));
-    }
-
-    if (!html_upload_stream_close(con_)) {
-      BOOST_FAIL("Failed to close upload stream: " << html_errmsg(con_));
-    }
-
-    if (!html_navigate(con_, url.c_str())) {
-      BOOST_FAIL("Failed to navigate to /index.html: " << html_errmsg(con_));
-    }
-  }
-
-  bool confirm(const std::string &msg) {
-    std::ostringstream os;
-    os << "<script src=\"/html/forms.js\"></script>"
-          "<form>"
-       << "<h1>" << msg << "</h1>"
-       << "<div><button name=\"val\" value=\"yes\">Yes</button>"
-          "<button name=\"val\" value=\"no\">No</button>"
-          "</form>";
-
-    render(os.str());
-    html_form *form;
-    if (!html_form_read(con_, &form)) {
-      BOOST_FAIL("Failed to read confirm for '" << msg
-                                                << "': " << html_errmsg(con_));
-    }
-
-    std::string val{html_form_value_of(form, "val")};
-    return val == "yes";
-  }
-
-  std::string recv() {
-    char buf[4096];
-    std::size_t n;
-    if (!html_recv(con_, buf, sizeof(buf), &n)) {
-      BOOST_FAIL("Failed to receive message: " << html_errmsg(con_));
-    }
-
-    return std::string{buf, buf + n};
-  }
-
-  void send(const std::string &msg) {
-    if (!html_send(con_, msg.data(), msg.size())) {
-      BOOST_FAIL("Failed to send message: " << html_errmsg(con_));
-    }
-  }
-
-  ~f() { html_disconnect(con_); }
-};
-
-BOOST_FIXTURE_TEST_CASE(HasValueInSubmittedFormField, f) {
-  html_upload_stream_open(con_, "/index.html");
-  const char *contents = R"(<!DOCTYPE html>
-<html>
-<head>
-<script src="/html/forms.js"></script>
-</head>
-<body>
-<form>
-<input type="text" value="value" name="field" />
-<button id="click-me">Click Me</button>
-</form>
-<script>
-window.onload = () => {
-const btn = document.getElementById('click-me');
-btn.click();
-}
-</script>
-</body>
-</html>
-)";
-
-  html_upload_stream_write(con_, contents, strlen(contents));
-  html_upload_stream_close(con_);
-
-  html_navigate(con_, "/index.html");
-
-  html_form *form;
-  if (!html_form_read(con_, &form)) {
-    BOOST_FAIL("Form not read");
-    return;
-  }
-
-  const char *field_c = html_form_value_of(form, "field");
-  if (!field_c)
-    BOOST_FAIL("field form field not found");
-
-  std::string_view field = field_c;
-  BOOST_TEST(field == "value");
-  html_form_free(form);
-}
-
-BOOST_FIXTURE_TEST_CASE(UploadIndividualFiles, f) {
-  auto docroot = content_dir_ / "basic";
-  auto index = docroot / "index.html";
-  auto css = docroot / "main.css";
-  auto js = docroot / "main.js";
-
-  html_upload_file(con_, "/index.html", index.c_str());
-  html_upload_file(con_, "/main.css", css.c_str());
-  html_upload_file(con_, "/main.js", js.c_str());
-
-  html_navigate(con_, "/index.html");
-
-  html_form *form;
-  if (!html_form_read(con_, &form)) {
-    BOOST_FAIL("Form not read");
-    return;
-  }
-
-  std::string_view color = html_form_value_of(form, "bg-color");
-  BOOST_TEST(color == "rgb(238, 255, 238)");
-  html_form_free(form);
-}
-
-BOOST_FIXTURE_TEST_CASE(UploadDirectories, f) {
-  auto docroot = content_dir_ / "basic";
-
-  html_upload_dir(con_, "/", docroot.c_str());
-
-  html_navigate(con_, "/index.html");
-
-  html_form *form;
-  if (!html_form_read(con_, &form)) {
-    BOOST_FAIL("Form not read");
-    return;
-  }
-
-  std::string_view color = html_form_value_of(form, "bg-color");
-  BOOST_TEST(color == "rgb(238, 255, 238)");
-  html_form_free(form);
-}
-
-BOOST_FIXTURE_TEST_CASE(UploadTarGz, f) {
-  auto archive = content_dir_ / "basic.tar.gz";
-
-  html_upload_archive(con_, "/", archive.c_str());
-
-  html_navigate(con_, "/index.html");
-
-  html_form *form;
-  if (!html_form_read(con_, &form)) {
-    BOOST_FAIL("Form not read");
-    return;
-  }
-
-  std::string_view color = html_form_value_of(form, "bg-color");
-  BOOST_TEST(color == "rgb(238, 255, 238)");
-  html_form_free(form);
-}
-
-BOOST_FIXTURE_TEST_CASE(ClickingCloseXRequestsClose, f) {
-  render("<h1> Press the close X</h1>");
-
-  html_form *form;
-  int ret = html_form_read(con_, &form);
-  BOOST_TEST(!ret, "Expected html_form_read to return falsy");
-  BOOST_TEST(html_close_requested(con_));
-
-  html_reject_close(con_);
-  BOOST_TEST(!html_close_requested(con_));
-}
-
-BOOST_FIXTURE_TEST_CASE(AbruptDisconnectShowsErrorMessage, f) {
-  render("<h1> Expect an error message above this </h1>");
-
-  ::close(con_->fd);
-
-  if (!html_connect(&con_)) {
-    BOOST_FAIL("Failed to connect to server again: " << html_errmsg(con_));
-  }
-
-  BOOST_TEST(confirm("Is there a 'disconnect' error popup?"));
-}
-
-BOOST_FIXTURE_TEST_CASE(MimeMapByFileExtension, f) {
-  auto docroot = content_dir_ / "basic";
-  auto index = docroot / "index.html";
-  auto css = docroot / "main.css";
-  auto js = docroot / "main.js";
-
-  // odd extension swap to prove that this is respected
-  html_upload_file(con_, "/main.js", css.c_str());
-  html_upload_file(con_, "/main.css", js.c_str());
-
-  auto n = std::filesystem::file_size(index);
-  std::string contents;
-  contents.resize(n);
-  std::ifstream file{index};
-  if (!file) {
-    BOOST_FAIL("Failed to open file " << index);
-  }
-
-  file.read(contents.data(), n);
-  ::replace(contents, "main.css", "main.temp");
-  ::replace(contents, "main.js", "main.css");
-  ::replace(contents, "main.temp", "main.js");
-
-  // NOW THE FUN PART
-  html_mime_map *mimes = html_mime_map_create();
-  if (!mimes) {
-    BOOST_FAIL("Failed to allocate mime map");
-  }
-
-  html_mime_map_add(mimes, ".test", "text/html");
-  html_mime_map_add(mimes, ".css", "text/javascript");
-  html_mime_map_add(mimes, ".js", "text/css");
-
-  if (!html_mime_map_apply(con_, mimes)) {
-    BOOST_FAIL("Failed to apply mime map: " << html_errmsg(con_));
-  }
-
-  html_mime_map_free(mimes);
-
-  render(contents, "/index.test");
-
-  html_form *form;
-  if (!html_form_read(con_, &form)) {
-    BOOST_FAIL("Form not read: " << html_errmsg(con_));
-  }
-
-  std::string_view color = html_form_value_of(form, "bg-color");
-  BOOST_TEST(color == "rgb(238, 255, 238)");
-  html_form_free(form);
-}
-
-BOOST_FIXTURE_TEST_CASE(AppMessagesOverWebsocket, f) {
-  auto docroot = content_dir_ / "msg";
-
-  html_upload_dir(con_, "/", docroot.c_str());
-
-  html_navigate(con_, "/index.html");
-
-  auto start = recv();
-  BOOST_TEST(start == "start!");
-
-  // now it echoes
-  send("first");
-  BOOST_TEST(recv() == "first");
-
-  send("second");
-  BOOST_TEST(recv() == "second");
+  c.navigate("/index.html");
+  s.pop_event(evt);
+  EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
 }
