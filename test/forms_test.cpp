@@ -2,7 +2,7 @@
 
 #include <catui.h>
 #include <html_forms.h>
-#include <html_forms/server.h>
+#include <html_forms_server.h>
 #include <msgstream.h>
 #include <unixsocket.h>
 

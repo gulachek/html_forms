@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "parse_target.hpp"
+#include "html_forms_server/private/parse_target.hpp"
 
 struct ParseTargetUrl : public testing::Test {
 protected:

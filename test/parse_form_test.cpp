@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "html_connection.h"
 #include "html_forms.h"
 #include "html_forms/encoding.h"
+#include "html_forms/private/html_connection.h"
 #include <msgstream.h>
 
 class FormParsing : public testing::Test {
