@@ -1,4 +1,4 @@
-#include "session_lock.hpp"
+#include "html_forms_server/private/session_lock.hpp"
 
 #include <fcntl.h>
 #include <sys/file.h>

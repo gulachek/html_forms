@@ -1,1 +1,1 @@
-set path=,,src/**,include/**,test/**,private/**
+set path=,,client/**,server/**,test/**

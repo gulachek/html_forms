@@ -1,5 +1,5 @@
-#include "my-asio.hpp"
-#include "async_msgstream.hpp"
+#include "html_forms_server/private/my-asio.hpp"
+#include "html_forms_server/private/async_msgstream.hpp"
 
 namespace my {
 

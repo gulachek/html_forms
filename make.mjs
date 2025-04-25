@@ -18,7 +18,7 @@ cli((make) => {
 	const { serverLib, distServer, testServer } = makeServer(make, htmlLib);
 
 	const doxygen = Path.build('docs/html/index.html');
-	make.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
+	make.add(doxygen, ['Doxyfile', 'client/include/html_forms.h'], (args) => {
 		return args.spawn('doxygen');
 	});
 
@@ -172,7 +172,7 @@ function makeServer(make, htmlLib) {
 	const gtest = findGtest(d);
 	const boost = findBoost(d);
 
-	const formsTs = Path.src('src/server/forms.ts');
+	const formsTs = Path.src('server/src/forms.ts');
 	const browserTs = Path.src('test/browser.ts');
 
 	const wpDir = Path.build('webpack');
@@ -196,7 +196,7 @@ function makeServer(make, htmlLib) {
 		await writeFile(cpp, bufToCppArray('forms_js', buf), 'utf8');
 	});
 
-	const loadingHtml = Path.src('src/server/loading.html');
+	const loadingHtml = Path.src('server/src/loading.html');
 	const loadingHtmlCpp = Path.build('server/loading_html.cpp');
 	make.add(loadingHtmlCpp, [loadingHtml], async (args) => {
 		const [cpp, html] = args.absAll(loadingHtmlCpp, loadingHtml);
@@ -207,7 +207,7 @@ function makeServer(make, htmlLib) {
 
 	let session_lock;
 	if (platform() === 'darwin') {
-		session_lock = Path.src('src/server/posix/session_lock.cpp');
+		session_lock = Path.src('server/src/posix/session_lock.cpp');
 	} else {
 		throw new Error('Platform not supported');
 	}
@@ -215,19 +215,19 @@ function makeServer(make, htmlLib) {
 	const serverLib = d.addLibrary({
 		name: 'html_forms_server',
 		src: [
-			'src/server/server.cpp',
-			'src/server/mime_type.cpp',
-			'src/server/http_listener.cpp',
-			'src/server/my-asio.cpp',
-			'src/server/my-beast.cpp',
-			'src/server/browser.cpp',
-			'src/server/parse_target.cpp',
+			'server/src/server.cpp',
+			'server/src/mime_type.cpp',
+			'server/src/http_listener.cpp',
+			'server/src/my-asio.cpp',
+			'server/src/my-beast.cpp',
+			'server/src/browser.cpp',
+			'server/src/parse_target.cpp',
 			session_lock,
 			formsJsCpp,
 			loadingHtmlCpp,
 		],
 		linkTo: [htmlLib, libarchive, boost, catui],
-		includeDirs: ['include', 'private'],
+		includeDirs: ['server/include'],
 	});
 
 	const browserBundle = wpDir.join('browser.cjs');

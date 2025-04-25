@@ -1,4 +1,4 @@
-#include "mime_type.hpp"
+#include "html_forms_server/private/mime_type.hpp"
 
 std::string_view mime_type(const std::string_view &ext) {
 #define MAP(EXT, MIME)                                                         \

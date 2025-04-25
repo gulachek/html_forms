@@ -1,8 +1,8 @@
 #ifndef BROWSER_HPP
 #define BROWSER_HPP
 
-#include "asio-pch.hpp"
-#include "html_forms/server.h"
+#include "html_forms_server.h"
+#include "html_forms_server/private/asio-pch.hpp"
 
 #include <msgstream.h>
 

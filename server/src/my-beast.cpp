@@ -1,4 +1,4 @@
-#include "my-beast.hpp"
+#include "html_forms_server/private/my-beast.hpp"
 
 namespace my {
 

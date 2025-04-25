@@ -1,5 +1,5 @@
-#include "browser.hpp"
-#include "html_forms/server.h"
+#include "html_forms_server/private/browser.hpp"
+#include "html_forms_server.h"
 #include <iterator>
 
 using window_id = browser::window_id;
