@@ -188,7 +188,7 @@ function makeServer(make, htmlLib) {
 		},
 	});
 
-	const formsJsCpp = Path.build('server/forms_js.cpp');
+	const formsJsCpp = Path.build('server/src/forms_js.cpp');
 	make.add(formsJsCpp, [formsJsBundle], async (args) => {
 		const [cpp, js] = args.absAll(formsJsCpp, formsJsBundle);
 
@@ -197,7 +197,7 @@ function makeServer(make, htmlLib) {
 	});
 
 	const loadingHtml = Path.src('server/src/loading.html');
-	const loadingHtmlCpp = Path.build('server/loading_html.cpp');
+	const loadingHtmlCpp = Path.build('server/src/loading_html.cpp');
 	make.add(loadingHtmlCpp, [loadingHtml], async (args) => {
 		const [cpp, html] = args.absAll(loadingHtmlCpp, loadingHtml);
 
