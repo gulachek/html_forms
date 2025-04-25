@@ -4,7 +4,7 @@
 		"@types/node": "^20.8.10",
 		"electron": "^28.0.0",
 		"eslint": "^8.52.0",
-		"esmakefile-cmake": "^0.1.5",
+		"esmakefile-cmake": "^0.1.6",
 		"prettier": "^3.0.3",
 		"ts-loader": "^9.5.1",
 		"tsc": "^2.0.4",
