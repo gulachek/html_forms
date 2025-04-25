@@ -47,8 +47,8 @@ function makeClient(make) {
 
 	const htmlLib = d.addLibrary({
 		name: 'html_forms',
-		src: ['src/client/html_forms.c'],
-		includeDirs: ['include', 'private'],
+		src: ['client/src/html_forms.c'],
+		includeDirs: ['client/include'],
 		linkTo: [cjson, catui],
 	});
 
