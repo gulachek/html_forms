@@ -14,6 +14,40 @@ const config = {
 cli((make) => {
 	make.add('all', []);
 
+	const { htmlLib, distClient, example } = makeClient(make);
+	const { serverLib, distServer, testServer } = makeServer(make, htmlLib);
+
+	const testSock = Path.build('catui.sock');
+	const catuiDir = Path.build('catui');
+	const contentDir = Path.src('test/content');
+
+	const formsTest = distClient.addTest({
+		name: 'forms_test',
+		src: ['test/forms_test.cpp'],
+		linkTo: [htmlLib /* test framework */],
+		/*
+						CATUI_ADDRESS: testSock,
+						CATUI_DIR: catuiDir,
+						CONTENT_DIR: contentDir,
+		 */
+	});
+
+	const doxygen = Path.build('docs/html/index.html');
+	make.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
+		return args.spawn('doxygen');
+	});
+
+	make.add('all', [
+		doxygen,
+		serverLib.binary,
+		htmlLib.binary,
+		testServer.binary,
+		example,
+		addCompileCommands(make, distClient, distServer),
+	]);
+});
+
+function makeClient(make) {
 	const d = new Distribution(make, {
 		name: 'html_forms',
 		version: '0.1.0',
@@ -21,25 +55,10 @@ cli((make) => {
 		cxxStd: 20,
 	});
 
-	const catui = d.findPackage('catui');
-	const cjson = d.findPackage({
-		pkgconfig: 'libcjson',
-		cmake: {
-			packageName: 'cJSON',
-			libraryTarget: 'cjson',
-		},
-	});
-	const boost = d.findPackage({
-		pkgconfig: 'boost-headers',
-		cmake: {
-			packageName: 'Boost',
-			component: 'headers',
-			libraryTarget: 'Boost::headers',
-		},
-	});
-	const libarchive = d.findPackage('libarchive');
-
-	const gtest = d.findPackage('gtest_main');
+	const catui = findCatui(d);
+	const cjson = findCjson(d);
+	const gtest = findGtest(d);
+	const boost = findBoost(d);
 
 	const htmlLib = d.addLibrary({
 		name: 'html_forms',
@@ -137,6 +156,37 @@ cli((make) => {
 		() => {},
 	);
 
+	const parseFormTest = d.addTest({
+		name: 'parse_form_test',
+		src: ['test/parse_form_test.cpp'],
+		linkTo: [htmlLib, gtest],
+	});
+
+	const escapeStringTest = d.addTest({
+		name: 'escape_string_test',
+		src: ['test/escape_string_test.cpp'],
+		linkTo: [htmlLib, gtest],
+	});
+
+	make.add('test', [parseFormTest.run, escapeStringTest.run]);
+
+	return { htmlLib, distClient: d, example };
+}
+
+function makeServer(make, htmlLib) {
+	const d = new Distribution(make, {
+		name: 'html_forms_server',
+		version: '0.1.0',
+		cStd: 17,
+		cxxStd: 20,
+	});
+
+	const catui = findCatui(d);
+	const cjson = findCjson(d);
+	const libarchive = d.findPackage('libarchive');
+	const gtest = findGtest(d);
+	const boost = findBoost(d);
+
 	const formsTs = Path.src('src/server/forms.ts');
 	const browserTs = Path.src('test/browser.ts');
 
@@ -195,7 +245,7 @@ cli((make) => {
 			formsJsCpp,
 			loadingHtmlCpp,
 		],
-		linkTo: [htmlLib, libarchive, boost],
+		linkTo: [htmlLib, libarchive, boost, catui],
 		includeDirs: ['include', 'private'],
 	});
 
@@ -205,60 +255,66 @@ cli((make) => {
 		linkTo: [cjson, serverLib],
 	});
 
+	make.add(testServer.binary, [browserBundle]);
+
 	const urlTest = d.addTest({
 		name: 'url_test',
 		src: ['test/url_test.cpp'],
 		linkTo: [serverLib, gtest],
 	});
 
-	const parseFormTest = d.addTest({
-		name: 'parse_form_test',
-		src: ['test/parse_form_test.cpp'],
-		linkTo: [htmlLib, gtest],
+	make.add('test', [urlTest.run], () => {});
+
+	return { serverLib, distServer: d, testServer };
+}
+
+function findGtest(dist) {
+	return dist.findPackage('gtest_main');
+}
+
+function findCatui(dist) {
+	return dist.findPackage('catui');
+}
+
+function findCjson(dist) {
+	return dist.findPackage({
+		pkgconfig: 'libcjson',
+		cmake: {
+			packageName: 'cJSON',
+			libraryTarget: 'cjson',
+		},
+	});
+}
+
+function findBoost(dist) {
+	return dist.findPackage({
+		pkgconfig: 'boost-headers',
+		cmake: {
+			packageName: 'Boost',
+			component: 'headers',
+			libraryTarget: 'Boost::headers',
+		},
+	});
+}
+
+function makeConfig(make, configPath, keyVals) {
+	const lines = [];
+	for (const key in keyVals) {
+		let val = keyVals[key];
+		if (Path.isPath(val)) {
+			val = make.abs(val);
+		}
+
+		lines.push(`const char *${key} = "${val}";`);
+	}
+
+	const config = Path.build(configPath);
+	make.add(config, async (args) => {
+		await writeFile(args.abs(config), lines.join('\n'), 'utf8');
 	});
 
-	const escapeStringTest = d.addTest({
-		name: 'escape_string_test',
-		src: ['test/escape_string_test.cpp'],
-		linkTo: [htmlLib, gtest],
-	});
-
-	const testSock = Path.build('catui.sock');
-	const catuiDir = Path.build('catui');
-	const contentDir = Path.src('test/content');
-
-	const formsTest = d.addTest({
-		name: 'forms_test',
-		src: ['test/forms_test.cpp'],
-		linkTo: [htmlLib /* test framework */],
-		/*
-						CATUI_ADDRESS: testSock,
-						CATUI_DIR: catuiDir,
-						CONTENT_DIR: contentDir,
-		 */
-	});
-
-	make.add(
-		'test',
-		[urlTest.run, parseFormTest.run, escapeStringTest.run],
-		() => {},
-	);
-
-	const doxygen = Path.build('docs/html/index.html');
-	make.add(doxygen, ['Doxyfile', 'include/html_forms.h'], (args) => {
-		return args.spawn('doxygen');
-	});
-
-	make.add('all', [
-		browserBundle,
-		doxygen,
-		serverLib.binary,
-		htmlLib.binary,
-		testServer.binary,
-		example,
-		addCompileCommands(make, d),
-	]);
-});
+	return config;
+}
 
 function bufToCppArray(identifier, buf) {
 	const array = `${identifier}_array__`;
@@ -282,23 +338,4 @@ function bufToCppArray(identifier, buf) {
 	}`);
 
 	return pieces.join('');
-}
-
-function makeConfig(make, configPath, keyVals) {
-	const lines = [];
-	for (const key in keyVals) {
-		let val = keyVals[key];
-		if (Path.isPath(val)) {
-			val = make.abs(val);
-		}
-
-		lines.push(`const char *${key} = "${val}";`);
-	}
-
-	const config = Path.build(configPath);
-	make.add(config, async (args) => {
-		await writeFile(args.abs(config), lines.join('\n'), 'utf8');
-	});
-
-	return config;
 }
