@@ -168,7 +168,10 @@ function makeServer(make, htmlLib) {
 
 	const catui = findCatui(d);
 	const cjson = findCjson(d);
-	const libarchive = d.findPackage('libarchive');
+	const libarchive = findLibArchive(d);
+	// this is needed because libarchive cmake package is
+	// leaky and does not find zlib
+	const zlib = findZlib(d);
 	const gtest = findGtest(d);
 	const boost = findBoost(d);
 
@@ -226,7 +229,7 @@ function makeServer(make, htmlLib) {
 			formsJsCpp,
 			loadingHtmlCpp,
 		],
-		linkTo: [htmlLib, libarchive, boost, catui],
+		linkTo: [htmlLib, libarchive, zlib, boost, catui],
 		includeDirs: ['server/include'],
 	});
 
@@ -283,6 +286,26 @@ function findCjson(dist) {
 		cmake: {
 			packageName: 'cJSON',
 			libraryTarget: 'cjson',
+		},
+	});
+}
+
+function findLibArchive(dist) {
+	return dist.findPackage({
+		pkgconfig: 'libarchive',
+		cmake: {
+			packageName: 'LibArchive',
+			libraryTarget: 'LibArchive::LibArchive',
+		},
+	});
+}
+
+function findZlib(dist) {
+	return dist.findPackage({
+		pkgconfig: 'zlib',
+		cmake: {
+			packageName: 'ZLIB',
+			libraryTarget: 'ZLIB::ZLIB',
 		},
 	});
 }
