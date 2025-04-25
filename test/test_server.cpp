@@ -15,11 +15,13 @@
 
 int spawn_browser(int *fd_in, int *fd_out);
 
+extern const char *browser_bundle;
+
 #define BROWSER_BUF_SIZE 2048
 #define BROWSER_EXE "npx"
 #define BROWSER_ARGS                                                           \
                                                                                \
-  { "npx", "electron", "build/webpack/browser.cjs" }
+  { "npx", "electron", browser_bundle }
 
 class event_listener {
 private:

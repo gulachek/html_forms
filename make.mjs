@@ -192,7 +192,6 @@ function makeServer(make, htmlLib) {
 
 	const wpDir = Path.build('webpack');
 	const formsJsBundle = wpDir.join('forms.js');
-	const browserBundle = wpDir.join('browser.cjs');
 
 	addWebpack(make, config.webpack, formsTs, formsJsBundle, {
 		target: 'electron-main',
@@ -202,9 +201,6 @@ function makeServer(make, htmlLib) {
 				name: 'HtmlForms',
 			},
 		},
-	});
-	addWebpack(make, config.webpack, browserTs, browserBundle, {
-		target: 'electron-main',
 	});
 
 	const formsJsCpp = Path.build('server/forms_js.cpp');
@@ -249,13 +245,22 @@ function makeServer(make, htmlLib) {
 		includeDirs: ['include', 'private'],
 	});
 
-	const testServer = d.addTest({
-		name: 'test_server',
-		src: ['test/test_server.cpp'],
-		linkTo: [cjson, serverLib],
+	const browserBundle = wpDir.join('browser.cjs');
+	addWebpack(make, config.webpack, browserTs, browserBundle, {
+		target: 'electron-main',
 	});
 
-	make.add(testServer.binary, [browserBundle]);
+	const testServerConfig = makeConfig(make, 'test/test_server_config.cpp', {
+		browser_bundle: browserBundle,
+	});
+
+	make.add(testServerConfig, [browserBundle]);
+
+	const testServer = d.addTest({
+		name: 'test_server',
+		src: ['test/test_server.cpp', testServerConfig],
+		linkTo: [cjson, serverLib],
+	});
 
 	const urlTest = d.addTest({
 		name: 'url_test',
