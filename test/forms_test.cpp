@@ -8,20 +8,37 @@
 
 #include <unistd.h>
 
+#include <boost/asio/connect.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/beast.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
+
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <regex>
+#include <string>
 #include <thread>
 
 #define LOG 0
 
+extern const char *test_scratch_dir;
 std::mutex log_mtx_;
+
+namespace fs = std::filesystem;
+namespace beast = boost::beast; // from <boost/beast.hpp>
+namespace http = beast::http;   // from <boost/beast/http.hpp>
+namespace net = boost::asio;    // from <boost/asio.hpp>
+using tcp = net::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 void log(const std::string &s) {
   if (LOG) {
@@ -30,9 +47,7 @@ void log(const std::string &s) {
   }
 }
 
-namespace fs = std::filesystem;
-
-extern const char *test_scratch_dir;
+http::response<http::string_body> http_get(const std::string &url);
 
 template <typename Duration> class timer {
   Duration d_;
@@ -204,6 +219,14 @@ public:
     int rc = html_navigate(con_, url);
     ASSERT_TRUE(rc);
   }
+
+  void upload_string(const char *url, std::string content) {
+    log("uploading " + std::string{url});
+    log(content);
+    assert(html_upload_stream_open(con_, url));
+    assert(html_upload_stream_write(con_, content.data(), content.size()));
+    assert(html_upload_stream_close(con_));
+  }
 };
 
 TEST(HtmlForms, NavigateTriggersServerEvent) {
@@ -214,4 +237,71 @@ TEST(HtmlForms, NavigateTriggersServerEvent) {
   c.navigate("/index.html");
   s.pop_event(evt);
   EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
+}
+
+TEST(HtmlForms, CanRequestUploadedResourceAfterSubsequentNavigate) {
+  server s;
+  client c{s};
+  html_forms_server_event evt;
+
+  c.upload_string("/hello.html", "hello");
+  c.navigate("/hello.html");
+  s.pop_event(evt);
+  ASSERT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
+
+  auto resp = http_get(evt.data.open_url.url);
+  EXPECT_EQ(resp.result_int(), 200);
+  EXPECT_EQ(resp.body(), "hello");
+}
+
+bool parse_url(const std::string &url, std::string &hostname, std::string &port,
+               std::string &path) {
+  std::smatch match;
+  std::regex url_re{R"(http://(localhost):(\d+)(.*))"};
+  log("parsing url " + url);
+  if (std::regex_match(url, match, url_re)) {
+    log("url match!");
+    hostname = match[1];
+    port = match[2];
+    path = match[3];
+    return true;
+  }
+
+  log("not a url match");
+  return false;
+}
+
+http::response<http::string_body> http_get(const std::string &url) {
+  log("HTTP GET " + url);
+  std::string hostname;
+  std::string port;
+  std::string path;
+
+  assert(parse_url(url, hostname, port, path));
+
+  // from
+  // https://www.boost.org/doc/libs/develop/libs/beast/example/http/client/sync/http_client_sync.cpp
+  net::io_context ioc;
+  tcp::resolver resolver{ioc};
+  beast::tcp_stream stream{ioc};
+
+  log("resolving hostname");
+  auto const results = resolver.resolve(hostname, port);
+
+  log("connecting to host");
+  stream.connect(results);
+
+  http::request<http::string_body> req{http::verb::get, path, 11};
+  req.set(http::field::host, hostname);
+  req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+  log("sending http request");
+  http::write(stream, req);
+
+  log("reading response");
+  beast::flat_buffer buffer;
+  http::response<http::string_body> resp;
+  http::read(stream, buffer, resp);
+
+  return resp;
 }
