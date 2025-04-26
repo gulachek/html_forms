@@ -1,7 +1,7 @@
 name: Install Vendor Libraries
 
 on:
-  workflow-call:
+  workflow_call:
 
 jobs:
   install-vendor:
