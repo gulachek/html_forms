@@ -10,8 +10,7 @@ jobs:
         os: [macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - name: Install Vendor Libraries
-        uses: ./.github/workflows/install-vendor.yml
+      - uses: ./.github/workflows/install-vendor.yml
         with:
           runs-on: ${{ runner.os }}
       - name: Restore Vendor
