@@ -46,7 +46,7 @@ jobs:
       - name: Combine Keys to JSON Object
         id: combine-keys
         run: |
-          macos="${{ jobs.install-vendor.outputs.vendor-key-macOS }}"
-          linux="${{ jobs.install-vendor.outputs.vendor-key-Linux }}"
+          macos="${{ needs.install-vendor.outputs.vendor-key-macOS }}"
+          linux="${{ needs.install-vendor.outputs.vendor-key-Linux }}"
           keys="{\"macOS\":\"$macos",\"Linux\":\"$linux\"}"
           echo "vendor-keys=$keys" >> "$GITHUB_OUTPUT"
