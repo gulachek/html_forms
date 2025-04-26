@@ -3,47 +3,6 @@ name: Push Tests
 on: [push]
 
 jobs:
-  install-boost:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cache Boost
-        id: cache-boost
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: ${{ runner.os }}-boost-${{ hashFiles('script/install-boost.sh', 'script/util.sh') }}
-      - if: ${{ steps.cache-boost.outputs.cache-hit != 'true' }}
-        name: Install Boost
-        run: script/install-boost.sh
-  install-vendor:
-    needs: install-boost # only for sequencing cache
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore Boost
-        id: restore-boost
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: ${{ runner.os }}-boost-${{ hashFiles('script/install-boost.sh', 'script/util.sh') }}
-      - name: Cache Vendor
-        id: cache-vendor
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: ${{ runner.os }}-vendor-${{ hashFiles('script/install-*.sh', 'script/util.sh') }}
-      - if: ${{ steps.cache-vendor.outputs.cache-hit != 'true' }}
-        name: Install Vendor
-        run: |
-          script/install-deps.sh
-          script/install-libarchive.sh
   unit-tests:
     needs: install-vendor
     runs-on: ${{ matrix.os }}
@@ -52,6 +11,10 @@ jobs:
         os: [macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Install Vendor Libraries
+        uses: ./.github/workflows/install-vendor.yml
+        with:
+          runs-on: ${{ runner.os }}
       - name: Restore Vendor
         id: restore-vendor
         uses: actions/cache@v4
