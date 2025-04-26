@@ -6,7 +6,7 @@ on:
     outputs:
       vendor-keys:
         description: 'Vendor library cache keys indexed by runner.os'
-        value: ${{ jobs.combine-keys.outputs.vendor-key }}
+        value: ${{ jobs.combine-keys.outputs.vendor-keys }}
 
 jobs:
   install-vendor:
