@@ -1,12 +1,12 @@
-# Use ${{ fromJSON(jobs.<job id>.outputs.vendor-keys)[runner.os] }}
+# Use ${{ fromJSON(jobs.<job id>.outputs.cache-keys)[runner.os] }}
 name: Install Vendor Libraries
 
 on:
   workflow_call:
     outputs:
-      vendor-keys:
+      cache-keys:
         description: 'Vendor library cache keys indexed by runner.os'
-        value: ${{ jobs.combine-keys.outputs.vendor-keys }}
+        value: ${{ jobs.combine-keys.outputs.cache-keys }}
 
 jobs:
   install-vendor:
@@ -15,22 +15,22 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     outputs:
-      vendor-key-macOS: ${{ steps.gen-key.outputs.vendor-key-macOS }}
-      vendor-key-Linux: ${{ steps.gen-key.outputs.vendor-key-Linux }}
+      cache-key-macOS: ${{ steps.gen-key.outputs.cache-key-macOS }}
+      cache-key-Linux: ${{ steps.gen-key.outputs.cache-key-Linux }}
     steps:
       - uses: actions/checkout@v4
       - name: Generate Cache Key
         id: gen-key
         run: |
           key="${{ runner.os }}-vendor-${{ hashFiles('script/install-*.sh', 'script/util.sh') }}"
-          echo "vendor-key-${{ runner.os }}=$key" >> "$GITHUB_OUTPUT"
-          echo "vendor-key=$key" >> "$GITHUB_OUTPUT"
+          echo "cache-key-${{ runner.os }}=$key" >> "$GITHUB_OUTPUT"
+          echo "cache-key=$key" >> "$GITHUB_OUTPUT"
       - name: Cache Vendor Libraries
         id: cache-vendor
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ steps.gen-key.outputs.vendor-key }}
+          key: ${{ steps.gen-key.outputs.cache-key }}
       - if: ${{ steps.cache-vendor.outputs.cache-hit != 'true' }}
         name: Install Dependencies
         run: |
@@ -41,12 +41,12 @@ jobs:
     needs: install-vendor
     runs-on: ubuntu-latest
     outputs:
-      vendor-keys: ${{ steps.combine-keys.outputs.vendor-keys }}
+      cache-keys: ${{ steps.combine-keys.outputs.cache-keys }}
     steps:
       - name: Combine Keys to JSON Object
         id: combine-keys
         run: |
-          macos="${{ needs.install-vendor.outputs.vendor-key-macOS }}"
-          linux="${{ needs.install-vendor.outputs.vendor-key-Linux }}"
+          macos="${{ needs.install-vendor.outputs.cache-key-macOS }}"
+          linux="${{ needs.install-vendor.outputs.cache-key-Linux }}"
           keys="{\"macOS\":\"$macos\",\"Linux\":\"$linux\"}"
-          echo "vendor-keys=$keys" >> "$GITHUB_OUTPUT"
+          echo "cache-keys=$keys" >> "$GITHUB_OUTPUT"

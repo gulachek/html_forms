@@ -18,7 +18,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ fromJSON(needs.install-vendor.outputs.vendor-keys)[runner.os] }}
+          key: ${{ fromJSON(needs.install-vendor.outputs.cache-keys)[runner.os] }}
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
