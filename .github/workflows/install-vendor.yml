@@ -17,13 +17,14 @@ jobs:
           key="${{ runner.os }}-vendor-${{ hashFiles('script/install-*.sh', 'script/util.sh') }}"
           assignment="vendor-key-${{ runner.os }}=$key"
           echo "$assignment"
-          echo "$assignment" >> "$GITHUB_OUTPUT"
+          echo "vendor-key-${{ runner.os }}=$key" >> "$GITHUB_OUTPUT"
+          echo "vendor-key=$key" >> "$GITHUB_OUTPUT"
       - name: Cache Vendor Libraries
         id: cache-vendor
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ steps.gen-key.outputs.vendor-key-${{ runner.os }} }}
+          key: ${{ steps.gen-key.outputs.vendor-key }}
       - if: ${{ steps.cache-vendor.outputs.cache-hit != 'true' }}
         name: Install Dependencies
         run: |
