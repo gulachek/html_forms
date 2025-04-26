@@ -1,7 +1,12 @@
+# Use ${{ fromJSON(jobs.<job id>.outputs.vendor-keys)[runner.os] }}
 name: Install Vendor Libraries
 
 on:
   workflow_call:
+    outputs:
+      vendor-keys:
+        description: 'Vendor library cache keys indexed by runner.os'
+        value: ${{ jobs.combine-keys.outputs.vendor-key }}
 
 jobs:
   install-vendor:
@@ -9,14 +14,15 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
+    outputs:
+      vendor-key-macOS: ${{ steps.gen-key.outputs.vendor-key-macOS }}
+      vendor-key-Linux: ${{ steps.gen-key.outputs.vendor-key-Linux }}
     steps:
       - uses: actions/checkout@v4
       - name: Generate Cache Key
         id: gen-key
         run: |
           key="${{ runner.os }}-vendor-${{ hashFiles('script/install-*.sh', 'script/util.sh') }}"
-          assignment="vendor-key-${{ runner.os }}=$key"
-          echo "$assignment"
           echo "vendor-key-${{ runner.os }}=$key" >> "$GITHUB_OUTPUT"
           echo "vendor-key=$key" >> "$GITHUB_OUTPUT"
       - name: Cache Vendor Libraries
@@ -31,3 +37,16 @@ jobs:
           script/install-boost.sh
           script/install-libarchive.sh
           script/install-deps.sh
+  combine-keys:
+    needs: install-vendor
+    runs-on: ubuntu-latest
+    outputs:
+      vendor-keys: ${{ steps.combine-keys.outputs.vendor-keys }}
+    steps:
+      - name: Combine Keys to JSON Object
+        id: combine-keys
+        run: |
+          macos="${{ jobs.install-vendor.outputs.vendor-key-macOS }}"
+          linux="${{ jobs.install-vendor.outputs.vendor-key-Linux }}"
+          keys="{\"macOS\":\"$macos",\"Linux\":\"$linux\"}"
+          echo "vendor-keys=$keys" >> "$GITHUB_OUTPUT"
