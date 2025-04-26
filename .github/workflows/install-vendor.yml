@@ -48,5 +48,5 @@ jobs:
         run: |
           macos="${{ needs.install-vendor.outputs.vendor-key-macOS }}"
           linux="${{ needs.install-vendor.outputs.vendor-key-Linux }}"
-          keys="{\"macOS\":\"$macos",\"Linux\":\"$linux\"}"
+          keys="{\"macOS\":\"$macos\",\"Linux\":\"$linux\"}"
           echo "vendor-keys=$keys" >> "$GITHUB_OUTPUT"
