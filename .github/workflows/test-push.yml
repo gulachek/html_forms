@@ -3,16 +3,16 @@ name: Push Tests
 on: [push]
 
 jobs:
+  install-vendor:
+    uses: ./.github/workflows/install-vendor.yml
   unit-tests:
+    needs: install-vendor
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/workflows/install-vendor.yml
-        with:
-          runs-on: ${{ runner.os }}
       - name: Restore Vendor
         id: restore-vendor
         uses: actions/cache@v4

@@ -2,14 +2,13 @@ name: Install Vendor Libraries
 
 on:
   workflow-call:
-    inputs:
-      runs-on:
-        required: true
-        type: string
 
 jobs:
-  install-boost:
-    runs-on: ${{ inputs.runs-on }}
+  install-vendor:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Cache Vendor Libraries
