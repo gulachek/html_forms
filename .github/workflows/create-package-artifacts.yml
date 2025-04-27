@@ -1,0 +1,52 @@
+name: Create Package Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      vendor-cache-keys:
+        required: true
+        type: string
+    outputs:
+      client-artifact:
+        description: 'The artifact name for the uploaded client package'
+        value: ${{ jobs.create-package-artifacts.outputs.client-artifact }}
+      server-artifact:
+        description: 'The artifact name for the uploaded server package'
+        value: ${{ jobs.create-package-artifacts.outputs.server-artifact }}
+
+jobs:
+  create-package-artifacts:
+    runs-on: macos-latest
+    outputs:
+      client-artifact: ${{ steps.set-outputs.outputs.client-artifact }}
+      server-artifact: ${{ steps.set-outputs.outputs.server-artifact }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore Vendor
+        id: restore-vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ fromJSON(inputs.vendor-cache-keys)[runner.os] }}
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - run: npm ci
+      - run: node make.mjs dist-html_forms
+      - run: node make.mjs dist-html_forms_server
+      - name: Upload Client Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: html_forms-tarball
+          path: build/html_forms-*.tgz
+      - name: Upload Server Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: html_forms_server-tarball
+          path: build/html_forms_server-*.tgz
+      - name: Set Outputs
+        id: set-outputs
+        run: |
+          echo "client-artifact=html_forms-tarball" >> "$GITHUB_OUTPUT"
+          echo "server-artifact=html_forms_server-tarball" >> "$GITHUB_OUTPUT"

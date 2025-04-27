@@ -3,37 +3,18 @@ name: Test Package
 on:
   workflow_call:
     inputs:
-      package-name:
+      vendor-cache-keys:
         required: true
         type: string
-      vendor-cache-keys:
+      client-artifact:
+        required: true
+        type: string
+      server-artifact:
         required: true
         type: string
 
 jobs:
-  create-package:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore Vendor
-        id: restore-vendor
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: ${{ fromJSON(inputs.vendor-cache-keys)[runner.os] }}
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-      - run: npm ci
-      - run: node make.mjs dist-${{ inputs.package-name }}
-      - name: Upload Package Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ inputs.package-name }}-tarball
-          path: build/${{ inputs.package-name }}-*.tgz
   test-package:
-    needs: create-package
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -52,5 +33,11 @@ jobs:
       - run: npm ci
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.package-name }}-tarball
-      - run: script/test-release.sh ${{ inputs.package-name }}-*.tgz
+          name: ${{ inputs.client-artifact }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.server-artifact }}
+      - run: script/test-release.sh html_forms-*.tgz
+      # Note above client must happen before below server
+      # because server depends on client being installed
+      - run: script/test-release.sh html_forms_server-*.tgz

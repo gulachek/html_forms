@@ -5,20 +5,22 @@ on: [push]
 jobs:
   install-vendor:
     uses: ./.github/workflows/install-vendor.yml
+  create-package-artifacts:
+    needs: install-vendor
+    uses: ./.github/workflows/create-package-artifacts.yml
+    with:
+      vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
   run-unit-tests:
     needs: install-vendor
     uses: ./.github/workflows/run-unit-tests.yml
     with:
       vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
-  test-client-package:
-    needs: install-vendor
+  test-packages:
+    needs:
+      - install-vendor
+      - create-package-artifacts
     uses: ./.github/workflows/test-package.yml
     with:
       vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
-      package-name: html_forms
-  test-server-package:
-    needs: install-vendor
-    uses: ./.github/workflows/test-package.yml
-    with:
-      vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
-      package-name: html_forms_server
+      client-artifact: ${{ needs.create-package-artifacts.outputs.client-artifact }}
+      server-artifact: ${{ needs.create-package-artifacts.outputs.server-artifact }}
