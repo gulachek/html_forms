@@ -5,12 +5,11 @@ if [ ! -f package.json ]; then
 	exit 1
 fi
 
-. script/parse-package.sh
-
 PUBLISH_VERSION="${GITHUB_REF#refs/tags/v}"
+PACKAGE_VERSION="$(jq -r .version package.json)"
 
 if [ "$PUBLISH_VERSION" != "$PACKAGE_VERSION" ]; then
-	echo "Version in GITHUB_REF '$GITHUB_REF' does not match package.json version $PACKAGE_VERSION"
+	echo "Version '$PUBLISH_VERSION' in GITHUB_REF '$GITHUB_REF' does not match package.json version '$PACKAGE_VERSION'"
 	exit 1
 fi
 

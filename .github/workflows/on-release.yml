@@ -1,0 +1,45 @@
+name: Release Packages
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  install-vendor:
+    uses: ./.github/workflows/install-vendor.yml
+  create-package-artifacts:
+    needs: install-vendor
+    uses: ./.github/workflows/create-package-artifacts.yml
+    with:
+      vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
+  run-unit-tests:
+    needs: install-vendor
+    uses: ./.github/workflows/run-unit-tests.yml
+    with:
+      vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
+  test-packages:
+    needs:
+      - install-vendor
+      - create-package-artifacts
+    uses: ./.github/workflows/test-package.yml
+    with:
+      vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
+      client-artifact: ${{ needs.create-package-artifacts.outputs.client-artifact }}
+      server-artifact: ${{ needs.create-package-artifacts.outputs.server-artifact }}
+  upload-packages:
+    needs: create-package-artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.create-package-artifacts.outputs.client-artifact }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.create-package-artifacts.outputs.server-artifact }}
+      - run: script/upload-package.sh html_forms-*.tgz
+      - run: script/upload-package.sh html_forms_server-*.tgz
