@@ -10,12 +10,11 @@ fi
 
 . script/util.sh
 
-NAME="$(jq -r .name package.json)"
 VERSION="$(jq -r .version package.json)"
-TGZ="$NAME-$VERSION.tgz"
+TGZ="-$VERSION.tgz"
 
-DIST="$(realpath ${1:?Usage: $0 <$TGZ>})"
-if [ "$(basename $DIST)" != "$TGZ" ]; then
+DIST="$(realpath ${1:?Usage: $0 <package$TGZ>})"
+if [[ "$(basename $DIST)" != *"$TGZ" ]]; then
 	echo "Unexpected tarball '$DIST' given to $0"
 	exit 1
 fi
@@ -24,6 +23,9 @@ if [ ! -f "$DIST" ]; then
 	echo "$DIST doesn't exist"
 	exit 1
 fi
+
+NAME="$(basename $DIST)"
+NAME="${NAME%$TGZ}"
 
 PACKAGE="$VENDORSRC/$NAME"
 md "$PACKAGE"
@@ -34,7 +36,7 @@ cmake -DCMAKE_PREFIX_PATH="$VENDOR" -S "$PACKAGE" -B "$PACKAGE/build"
 cmake --build "$PACKAGE/build"
 cmake --install "$PACKAGE/build" --prefix "$VENDOR"
 
-TEST="$PWD/test/release"
+TEST="$PWD/test/release/$NAME"
 
 echo "Testing pkgconfig"
 rm -rf "$TEST/build"
