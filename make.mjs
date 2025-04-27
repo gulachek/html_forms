@@ -4,6 +4,9 @@ import { writeFile, readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { addWebpack } from './WebpackRule.mjs';
 
+const packageContent = await readFile('package.json', 'utf8');
+const { version } = JSON.parse(packageContent);
+
 const config = {
 	webpack: {
 		devtool: 'inline-source-map',
@@ -35,7 +38,7 @@ cli((make) => {
 function makeClient(make) {
 	const d = new Distribution(make, {
 		name: 'html_forms',
-		version: '0.1.0',
+		version,
 		cStd: 17,
 		cxxStd: 20,
 	});
@@ -161,7 +164,7 @@ function makeClient(make) {
 function makeServer(make, htmlLib) {
 	const d = new Distribution(make, {
 		name: 'html_forms_server',
-		version: '0.1.0',
+		version,
 		cStd: 17,
 		cxxStd: 20,
 	});

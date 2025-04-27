@@ -1,4 +1,6 @@
 {
+	"name": "html_forms",
+	"version": "0.1.0",
 	"main": "build/webpack/browser.cjs",
 	"devDependencies": {
 		"@types/node": "^20.8.10",
