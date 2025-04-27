@@ -1,0 +1,12 @@
+name: Orchestrate Actions on Push
+
+on: [push]
+
+jobs:
+  install-vendor:
+    uses: ./.github/workflows/install-vendor.yml
+  run-unit-tests:
+    needs: install-vendor
+    uses: ./.github/workflows/run-unit-tests.yml
+    with:
+      vendor-cache-keys: ${{ needs.install-vendor.outputs.cache-keys }}
