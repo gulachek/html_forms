@@ -1,3 +1,10 @@
+/**
+ * Copyright 2025 Nicholas Gulachek
+ *
+ * Use of this source code is governed by an MIT-style
+ * license that can be found in the LICENSE file or at
+ * https://opensource.org/licenses/MIT.
+ */
 #include "html_forms_server/private/http_listener.hpp"
 #include "html_forms_server/private/mime_type.hpp"
 #include "html_forms_server/private/parse_target.hpp"
