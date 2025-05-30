@@ -107,16 +107,23 @@ struct html_mime_map_ {
   cJSON *array;
 };
 
+static html_connection *html_connection_alloc() {
+  html_connection *con = malloc(sizeof(struct html_connection_));
+  if (!con)
+    return NULL;
+
+  con->close_requested = 0;
+  con->fd = -1;
+  return con;
+}
+
 int html_connect(html_connection **pcon) {
   if (!pcon)
     goto fail;
 
-  html_connection *con = *pcon = malloc(sizeof(struct html_connection_));
+  html_connection *con = *pcon = html_connection_alloc();
   if (!con)
     goto fail;
-
-  con->close_requested = 0;
-  con->fd = -1;
 
   FILE *f = tmpfile();
   if (!f) {
@@ -142,6 +149,18 @@ fail:
   if (f)
     fclose(f);
   return 0;
+}
+
+int html_connection_transfer_fd(html_connection **pcon, int fd) {
+  if (!pcon)
+    return 0;
+
+  html_connection *con = *pcon = html_connection_alloc();
+  if (!con)
+    return 0;
+
+  con->fd = fd;
+  return 1;
 }
 
 void html_disconnect(html_connection *con) {

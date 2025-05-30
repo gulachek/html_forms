@@ -88,6 +88,15 @@ int HTML_API html_connect(html_connection **pcon);
 void HTML_API html_disconnect(html_connection *con);
 
 /**
+ * Initialize a connection object using a file descriptor previously
+ * connected to a catui server with `com.gulachek.html-forms` protocol.
+ * @param[out] pcon Pointer to connection object pointer
+ * @param[in] fd The fd associated with the previously bootstrapped connection
+ * @remark This should only be used to create new connection objects
+ */
+int HTML_API html_connection_transfer_fd(html_connection **pcon, int fd);
+
+/**
  * Get a file descriptor associated with a connection.
  * @param[in] con The connection
  * @return The fd the connection is associated with, otherwise -1

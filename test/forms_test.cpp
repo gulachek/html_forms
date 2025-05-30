@@ -196,7 +196,10 @@ public:
 };
 
 class client {
-  html_connection *con_;
+  html_connection *con_ = nullptr;
+  bool transferred_ = false;
+
+  client() = default;
 
 public:
   client(server &s) {
@@ -210,8 +213,15 @@ public:
   }
 
   ~client() {
-    log("html_disconnect");
-    html_disconnect(con_);
+    if (transferred_) {
+      log("skipping disconnect because connection was transferred");
+      // don't care about mem leak. Not recommended to transfer existing
+      // connection. Could make better by allowing release of fd, or
+      // manually do catui_connect and transfer that
+    } else {
+      log("html_disconnect");
+      html_disconnect(con_);
+    }
   }
 
   void navigate(const char *url) {
@@ -227,6 +237,18 @@ public:
     assert(html_upload_stream_write(con_, content.data(), content.size()));
     assert(html_upload_stream_close(con_));
   }
+
+  client transfer() {
+    log("transferring connection");
+    assert(con_);
+    int fd = html_connection_fd(con_);
+    assert(fd > -1);
+
+    client other;
+    int ret = html_connection_transfer_fd(&other.con_, fd);
+    assert(ret);
+    return other;
+  }
 };
 
 TEST(HtmlForms, NavigateTriggersServerEvent) {
@@ -235,6 +257,18 @@ TEST(HtmlForms, NavigateTriggersServerEvent) {
   html_forms_server_event evt;
 
   c.navigate("/index.html");
+  s.pop_event(evt);
+  EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
+}
+
+TEST(HtmlForms, CanNavigateATransferredConnection) {
+  server s;
+  client c{s};
+  html_forms_server_event evt;
+
+  client c2 = c.transfer();
+
+  c2.navigate("/index.html");
   s.pop_event(evt);
   EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
 }
