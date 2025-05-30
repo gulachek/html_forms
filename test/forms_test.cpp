@@ -29,7 +29,7 @@
 #include <string>
 #include <thread>
 
-#define LOG 1
+#define LOG 0
 
 extern const char *test_scratch_dir;
 std::mutex log_mtx_;
