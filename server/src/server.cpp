@@ -139,7 +139,7 @@ public:
     MKDIR(archives_dir_);
 #undef MKDIR
 
-    asio::dispatch(stream_.get_executor(), bind(&self::do_ack));
+    asio::dispatch(stream_.get_executor(), bind(&self::do_recv));
   }
 
   my::string_response respond(const std::string_view &target,
@@ -187,30 +187,10 @@ public:
   }
 
 private:
-  void do_ack() {
-    output_msg_buf_.resize(CATUI_ACK_SIZE);
-    auto n = catui_server_encode_ack(output_msg_buf_.data(),
-                                     output_msg_buf_.size(), stderr);
-    if (n < 0)
-      return;
-
-    my::async_msgstream_send(stream_, asio::buffer(output_msg_buf_), n,
-                             bind(&self::on_ack));
-  }
-
-  void on_ack(std::error_condition ec, std::size_t n) {
-    if (ec) {
-      log() << "Error sending ack: " << ec.message() << std::endl;
-      return end_catui();
-    }
-
-    output_msg_buf_.resize(HTML_MSG_SIZE);
-    do_recv();
-  }
-
   void do_recv() {
     log() << "Waiting to receive html message" << std::endl;
 
+    output_msg_buf_.resize(HTML_MSG_SIZE);
     asio::dispatch([this] {
       stream_.get_executor(),
           my::async_msgstream_recv(stream_, asio::buffer(output_msg_buf_),

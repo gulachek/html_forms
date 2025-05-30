@@ -214,6 +214,7 @@ int main(int argc, char **argv) {
       NOPE("Version is not compatible with com.gulachek.html-forms 0.1.0")
     }
 
+    catui_server_ack(con, stderr);
     html_forms_server_connect(server, con);
 #undef NOPE
   }

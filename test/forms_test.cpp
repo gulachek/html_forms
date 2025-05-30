@@ -166,6 +166,9 @@ public:
       std::string proto{req.protocol};
       assert(proto == "com.gulachek.html-forms");
 
+      log("sending catui ack");
+      catui_server_ack(client_fd_, stderr);
+
       log("connecting accepted fd to html server");
       html_forms_server_connect(html_server_, client_fd_);
 
