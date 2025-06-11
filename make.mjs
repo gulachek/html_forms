@@ -65,6 +65,20 @@ function makeClient(make) {
 		linkTo: [htmlLib],
 	});
 
+	const inputTransferConfig = makeConfig(
+		make,
+		'example/input_transfer/config.c',
+		{
+			docroot: Path.src('example/input_transfer/docroot'),
+		},
+	);
+
+	const inputTransfer = d.addTest({
+		name: 'input_transfer',
+		src: ['example/input_transfer/main.c', inputTransferConfig],
+		linkTo: [htmlLib],
+	});
+
 	const tarballIndexHtml = Path.src('example/tarball/docroot/index.html');
 	const tarballMainCss = Path.src('example/tarball/docroot/style/main.css');
 
@@ -140,6 +154,7 @@ function makeClient(make) {
 			tarball.binary,
 			todo.binary,
 			mimeSwap.binary,
+			inputTransfer.binary,
 		],
 		() => {},
 	);
