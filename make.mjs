@@ -47,6 +47,7 @@ function makeClient(make) {
 	const cjson = findCjson(d);
 	const gtest = findGtest(d);
 	const boost = findBoost(d);
+	const ttyTransfer = d.findPackage('tty_transfer');
 
 	const htmlLib = d.addLibrary({
 		name: 'html_forms',
@@ -76,7 +77,7 @@ function makeClient(make) {
 	const inputTransfer = d.addTest({
 		name: 'input_transfer',
 		src: ['example/input_transfer/main.c', inputTransferConfig],
-		linkTo: [htmlLib],
+		linkTo: [htmlLib, ttyTransfer],
 	});
 
 	const tarballIndexHtml = Path.src('example/tarball/docroot/index.html');

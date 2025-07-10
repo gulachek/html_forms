@@ -8,6 +8,7 @@
 
 #include <html_forms.h>
 #include <stdio.h>
+#include <tty_transfer.h>
 
 extern const char *docroot;
 
@@ -21,6 +22,14 @@ int main() {
 
   if (!html_upload_dir(con, "/", docroot)) {
     fprintf(stderr, "Failed to upload docroot: %s\n", html_errmsg(con));
+    return 1;
+  }
+
+  char transfer_token[37];
+  if (tty_transfer_request_io_token(transfer_token, 37) == TTY_TRANSFER_OK) {
+    printf("Received token!!! TODO: implement follow up\n");
+  } else {
+    fprintf(stderr, "Failed to receive tty I/O transfer token\n");
     return 1;
   }
 

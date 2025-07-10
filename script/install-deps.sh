@@ -135,3 +135,21 @@ cmake -DCMAKE_PREFIX_PATH="$VENDOR" -S . -B build
 cmake_build_install
 
 rm "$CATUI_DOWNLOAD"
+
+# tty_transfer
+TTY_DOWNLOAD="$VENDORSRC/tty-download.tgz"
+
+download \
+	-u "https://github.com/gulachek/tty_transfer/releases/download/v0.1.0/tty_transfer-0.1.0.tgz" \
+	-o "$TTY_DOWNLOAD" \
+	-c "4916729e3b4c9202618221e334d9a64322be46d05c1d8cc8affa4b80fbc5c12d"
+
+TTY_TRANSFER="$VENDORSRC/tty_transfer"
+md "$TTY_TRANSFER"
+
+untar -f "$TTY_DOWNLOAD" -d "$TTY_TRANSFER"
+cd "$TTY_TRANSFER"
+cmake -DCMAKE_PREFIX_PATH="$VENDOR" -S . -B build
+cmake_build_install
+
+rm "$TTY_DOWNLOAD"
