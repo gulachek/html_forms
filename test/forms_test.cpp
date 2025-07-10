@@ -17,6 +17,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -25,6 +26,7 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <random>
 #include <regex>
 #include <string>
 #include <thread>
@@ -62,11 +64,38 @@ public:
   }
 };
 
+class uuid_generator {
+private:
+  std::uniform_int_distribution<std::uint8_t> rng_;
+  std::random_device dev_;
+
+public:
+  uuid_generator() : rng_{0, 255}, dev_{} {}
+
+  std::string generate() {
+    std::uint8_t bytes[16];
+    for (int i = 0; i < 16; ++i) {
+      bytes[i] = rng_(dev_);
+    }
+
+    char uuid_str[37];
+    std::snprintf(
+        uuid_str, 37,
+        "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+        bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12],
+        bytes[13], bytes[14], bytes[15]);
+
+    return std::string{uuid_str};
+  }
+};
+
 class server {
   fs::path scratch_;
   fs::path catui_address_;
   int catui_server_;
 
+  uuid_generator uuidgen_;
   fs::path session_dir_;
   html_forms_server *html_server_;
   std::thread server_thread_;
@@ -170,7 +199,8 @@ public:
       catui_server_ack(client_fd_, stderr);
 
       log("connecting accepted fd to html server");
-      html_forms_server_connect(html_server_, client_fd_);
+      auto uuid = uuidgen_.generate();
+      html_forms_server_start_session(html_server_, uuid.c_str(), client_fd_);
 
       p.set_value(true);
     }};

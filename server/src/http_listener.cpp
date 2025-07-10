@@ -223,13 +223,10 @@ http_listener::http_listener(asio::io_context &ioc, tcp::endpoint endpoint)
 // Start accepting incoming connections
 void http_listener::run() { do_accept(); }
 
-std::string http_listener::add_session(std::weak_ptr<http_session> session) {
-  boost::uuids::uuid uuid{session_generator_()};
-  std::ostringstream os;
-  os << uuid;
-
-  auto it = sessions_.emplace(std::make_pair(os.str(), session));
-  return it.first->first;
+bool http_listener::add_session(const std::string &session_id,
+                                std::weak_ptr<http_session> session) {
+  auto it = sessions_.emplace(std::make_pair(session_id, session));
+  return true; // TODO double check session id not already in use
 }
 
 void http_listener::remove_session(const std::string &session_id) {

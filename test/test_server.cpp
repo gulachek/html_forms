@@ -9,7 +9,9 @@
 
 #include <array>
 #include <cassert>
+#include <cstdio>
 #include <iostream>
+#include <random>
 #include <string_view>
 #include <thread>
 
@@ -26,6 +28,7 @@ extern const char *browser_bundle;
 class event_listener {
 private:
   html_forms_server *html_;
+
   int browser_in_;
   int browser_out_;
 
@@ -128,6 +131,32 @@ void event_listener::event_callback(const html_forms_server_event *ev,
   evl->on_event(*ev);
 }
 
+class uuid_generator {
+private:
+  std::uniform_int_distribution<std::uint8_t> rng_;
+  std::random_device dev_;
+
+public:
+  uuid_generator() : rng_{0, 255}, dev_{} {}
+
+  std::string generate() {
+    std::uint8_t bytes[16];
+    for (int i = 0; i < 16; ++i) {
+      bytes[i] = rng_(dev_);
+    }
+
+    char uuid_str[37];
+    std::snprintf(
+        uuid_str, 37,
+        "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+        bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12],
+        bytes[13], bytes[14], bytes[15]);
+
+    return std::string{uuid_str};
+  }
+};
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " <port>\n"
@@ -144,6 +173,8 @@ int main(int argc, char **argv) {
     std::cerr << "Failed to initialize server on port " << port << std::endl;
     return 1;
   }
+
+  uuid_generator uuidgen;
 
   event_listener ev{server};
   ev.listen();
@@ -215,7 +246,9 @@ int main(int argc, char **argv) {
     }
 
     catui_server_ack(con, stderr);
-    html_forms_server_connect(server, con);
+
+    auto uuid = uuidgen.generate();
+    html_forms_server_start_session(server, uuid.c_str(), con);
 #undef NOPE
   }
 

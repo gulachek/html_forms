@@ -25,7 +25,6 @@ struct http_session {
 class http_listener : public std::enable_shared_from_this<http_listener> {
   boost::asio::io_context &ioc_;
   boost::asio::ip::tcp::acceptor acceptor_;
-  boost::uuids::random_generator session_generator_;
   std::map<std::string, std::weak_ptr<http_session>> sessions_;
 
 public:
@@ -37,7 +36,8 @@ public:
 
   std::uint16_t port() const { return acceptor_.local_endpoint().port(); }
 
-  std::string add_session(std::weak_ptr<http_session> session);
+  bool add_session(const std::string &session_id,
+                   std::weak_ptr<http_session> session);
   void remove_session(const std::string &session_id);
 
 private:

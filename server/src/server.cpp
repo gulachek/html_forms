@@ -86,11 +86,11 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   std::ostream &log() { return std::cerr << '[' << session_id_ << "] "; }
 
 public:
-  catui_connection(my::stream_descriptor &&stream,
+  catui_connection(my::stream_descriptor &&stream, const char *session_id,
                    const std::shared_ptr<http_listener> &http, browser &browsr,
                    const std::filesystem::path &all_sessions_dir)
-      : stream_{std::move(stream)}, http_{http}, browser_{browsr},
-        all_sessions_dir_{all_sessions_dir} {}
+      : stream_{std::move(stream)}, session_id_{session_id}, http_{http},
+        browser_{browsr}, all_sessions_dir_{all_sessions_dir} {}
 
   ~catui_connection() {
     http_->remove_session(session_id_);
@@ -109,7 +109,7 @@ public:
   void run() {
 
     // TODO - thread safety on http_ ptr
-    session_id_ = http_->add_session(weak_from_this());
+    http_->add_session(session_id_, weak_from_this());
     window_id_ = browser_.reserve_window(weak_from_this());
 
     docroot_ = all_sessions_dir_ / session_id_;
@@ -783,10 +783,10 @@ public:
     return 1;
   }
 
-  int connect(int client) {
+  int start_session(const char *session_id, int client) {
     auto con = std::make_shared<catui_connection>(
-        my::stream_descriptor{asio::make_strand(ioc_), client}, http_, browser_,
-        session_dir_);
+        my::stream_descriptor{asio::make_strand(ioc_), client}, session_id,
+        http_, browser_, session_dir_);
 
     con->run();
     return 1;
@@ -829,11 +829,12 @@ int html_forms_server_stop(html_forms_server *server) {
   return server->stop();
 }
 
-int html_forms_server_connect(html_forms_server *server, int fd) {
+int html_forms_server_start_session(html_forms_server *server,
+                                    const char *session_id, int fd) {
   if (!server)
     return 0;
 
-  return server->connect(fd);
+  return server->start_session(session_id, fd);
 }
 
 int html_forms_server_set_event_callback(html_forms_server *server,
