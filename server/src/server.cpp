@@ -64,7 +64,6 @@ class catui_connection : public std::enable_shared_from_this<catui_connection>,
   beast::flat_buffer ws_buf_;
   std::string ws_send_buf_;
   browser &browser_;
-  browser::window_id window_id_;
   bool gracefully_closed_ = false;
 
   std::map<std::string, std::string> mime_overrides_;
@@ -97,9 +96,9 @@ public:
 
     if (!gracefully_closed_) {
       browser_.show_error(
-          window_id_, "Session terminated. This is likely due to poor "
-                      "connection quality, killing a process, or a software "
-                      "bug.");
+          session_id_, "Session terminated. This is likely due to poor "
+                       "connection quality, killing a process, or a software "
+                       "bug.");
     }
 
     std::filesystem::remove_all(docroot_);
@@ -110,7 +109,7 @@ public:
 
     // TODO - thread safety on http_ ptr
     http_->add_session(session_id_, weak_from_this());
-    window_id_ = browser_.reserve_window(weak_from_this());
+    browser_.add_session(session_id_, weak_from_this());
 
     docroot_ = all_sessions_dir_ / session_id_;
 
@@ -235,7 +234,7 @@ private:
     log() << "CLOSE" << std::endl;
     gracefully_closed_ = true;
     end_catui();
-    browser_.release_window(window_id_);
+    browser_.remove_session(session_id_);
   }
 
   void do_map_mimes(html_mime_map *mimes) {
@@ -699,7 +698,7 @@ private:
     os << "http://localhost:" << http_->port() << '/' << session_id_ << msg.url;
     log() << "Opening " << os.str() << std::endl;
 
-    browser_.load_url(window_id_, os.str());
+    browser_.load_url(session_id_, os.str());
     do_recv();
   }
 
@@ -792,9 +791,10 @@ public:
     return 1;
   }
 
-  void close_window(int window_id) {
-    asio::dispatch(ioc_.get_executor(),
-                   std::bind(&browser::request_close, &browser_, window_id));
+  void close_window(const std::string &session_id) {
+    asio::dispatch(
+        ioc_.get_executor(),
+        std::bind(&browser::request_close, &browser_, std::string{session_id}));
   }
 
   void set_ev_callback(html_forms_server_event_callback *cb, void *ctx) {
@@ -844,11 +844,11 @@ int html_forms_server_set_event_callback(html_forms_server *server,
   return 1;
 }
 
-int HTML_API html_forms_server_close_window(html_forms_server *server,
-                                            int window_id) {
+int html_forms_server_close_window(html_forms_server *server,
+                                   const char *session_id) {
   if (!server)
     return 0;
 
-  server->close_window(window_id);
+  server->close_window(session_id);
   return 1;
 }

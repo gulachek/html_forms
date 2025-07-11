@@ -3,22 +3,22 @@ import { recv, send } from './MsgStream';
 
 const BUF_SIZE = 2048;
 
-const windows = new Map<number, BrowserWindow>();
+const windows = new Map<string, BrowserWindow>();
 
 interface OpenMessage {
 	type: 'open';
 	url: string;
-	windowId: number;
+	sessionId: string;
 }
 
 interface CloseMessage {
 	type: 'close';
-	windowId: number;
+	sessionId: string;
 }
 
 interface ErrorMessage {
 	type: 'error';
-	windowId: number;
+	sessionId: string;
 	msg: string;
 }
 
@@ -30,7 +30,7 @@ async function sendMsg(msg: InputMessage) {
 	await send(process.stdout, buf, BUF_SIZE);
 }
 
-function makeWindow(windowId: number): BrowserWindow {
+function makeWindow(sessionId: string): BrowserWindow {
 	const win = new BrowserWindow({ show: false });
 
 	const centerAndShowWindow = () => {
@@ -53,9 +53,9 @@ function makeWindow(windowId: number): BrowserWindow {
 
 	win.on('ready-to-show', centerAndShowWindow);
 	win.on('close', (e) => {
-		if (!windows.has(windowId)) return;
+		if (!windows.has(sessionId)) return;
 		e.preventDefault(); // let app do closing
-		sendMsg({ type: 'close', windowId });
+		sendMsg({ type: 'close', sessionId });
 	});
 
 	win.webContents.on('before-input-event', (e, input) => {
@@ -101,30 +101,30 @@ app.whenReady().then(async () => {
 		const jobj = JSON.parse(decoder.decode(msg)) as OutputMessage;
 
 		if (jobj.type === 'open') {
-			const { windowId, url } = jobj;
-			let win = windows.get(windowId);
+			const { sessionId, url } = jobj;
+			let win = windows.get(sessionId);
 
 			if (!win) {
-				win = makeWindow(windowId);
-				windows.set(windowId, win);
+				win = makeWindow(sessionId);
+				windows.set(sessionId, win);
 			}
 
 			win.loadURL(url);
 		} else if (jobj.type === 'close') {
-			const { windowId } = jobj;
-			const win = windows.get(windowId);
+			const { sessionId } = jobj;
+			const win = windows.get(sessionId);
 			if (!win) return;
 			win.destroy();
-			windows.delete(windowId);
+			windows.delete(sessionId);
 		} else if (jobj.type === 'error') {
-			const { windowId, msg } = jobj;
-			const win = windows.get(windowId);
+			const { sessionId, msg } = jobj;
+			const win = windows.get(sessionId);
 			if (!win) return;
 			dialog.showMessageBox(win, {
 				type: 'error',
 				message: msg,
 			});
-			windows.delete(windowId);
+			windows.delete(sessionId);
 		}
 	}
 });

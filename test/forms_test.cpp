@@ -173,8 +173,8 @@ public:
     fs::remove_all(scratch_);
   };
 
-  std::promise<bool> accept_client() {
-    std::promise<bool> p;
+  std::promise<std::string> accept_client() {
+    std::promise<std::string> p;
 
     std::thread t{[this, &p] {
       log("accepting catui client");
@@ -202,7 +202,7 @@ public:
       auto uuid = uuidgen_.generate();
       html_forms_server_start_session(html_server_, uuid.c_str(), client_fd_);
 
-      p.set_value(true);
+      p.set_value(uuid);
     }};
 
     t.detach();
@@ -231,6 +231,7 @@ public:
 class client {
   html_connection *con_ = nullptr;
   bool transferred_ = false;
+  std::string session_id_;
 
   client() = default;
 
@@ -241,7 +242,8 @@ public:
     log("calling html_connect");
     html_connect(&con_);
     log("waiting for server to finish accept");
-    assert(accepted.get_future().get());
+    session_id_ = accepted.get_future().get();
+    assert(!session_id_.empty());
     log("server done accepting");
   }
 
@@ -256,6 +258,8 @@ public:
       html_disconnect(con_);
     }
   }
+
+  std::string session_id() const { return session_id_; }
 
   void navigate(const char *url) {
     log("navigating to " + std::string{url});
@@ -292,6 +296,18 @@ TEST(HtmlForms, NavigateTriggersServerEvent) {
   c.navigate("/index.html");
   s.pop_event(evt);
   EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
+}
+
+TEST(HtmlForms, NavigatedWindowIsAssociatedWithClientSession) {
+  server s;
+  client c{s};
+  html_forms_server_event evt;
+
+  c.navigate("/index.html");
+  s.pop_event(evt);
+  EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
+
+  EXPECT_EQ(c.session_id(), std::string{evt.data.open_url.session_id});
 }
 
 TEST(HtmlForms, CanNavigateATransferredConnection) {

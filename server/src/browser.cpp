@@ -7,17 +7,17 @@
  */
 #include "html_forms_server/private/browser.hpp"
 #include "html_forms_server.h"
+#include "html_forms_server/private/evt_util.hpp"
 #include <iterator>
 
-using window_id = browser::window_id;
 using window_watcher = browser::window_watcher;
 
-browser::browser() : next_window_id_{1} {}
+browser::browser() {}
 
-void browser::request_close(window_id window) {
-  auto it = watchers_.find(window);
+void browser::request_close(const std::string &session) {
+  auto it = watchers_.find(session);
   if (it == watchers_.end()) {
-    std::cerr << "Attempting to close window that has no watcher: " << window
+    std::cerr << "Attempting to close session that has no watcher: " << session
               << std::endl;
     return;
   }
@@ -29,34 +29,33 @@ void browser::request_close(window_id window) {
   }
 }
 
-window_id
-browser::reserve_window(const std::weak_ptr<window_watcher> &watcher) {
-  auto win = next_window_id_++;
-  watchers_[win] = watcher;
-  return win;
+void browser::add_session(const std::string &session,
+                          const std::weak_ptr<window_watcher> &watcher) {
+  watchers_[session] = watcher;
 }
 
-void browser::release_window(window_id window) {
-  watchers_.erase(window);
+void browser::remove_session(const std::string &session) {
+  watchers_.erase(session);
   html_forms_server_event ev;
   ev.type = HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW;
-  ev.data.close_win.window_id = window;
+  copy_session_id(session, ev.data.close_win.session_id);
   notify_event(ev);
 }
 
-void browser::show_error(window_id window, const std::string &msg) {
+void browser::show_error(const std::string &session, const std::string &msg) {
   html_forms_server_event ev;
   ev.type = HTML_FORMS_SERVER_EVENT_SHOW_ERROR;
-  ev.data.show_err.window_id = window;
+  copy_session_id(session, ev.data.show_err.session_id);
   ::strlcpy(ev.data.show_err.msg, msg.data(), sizeof(ev.data.show_err.msg));
   notify_event(ev);
 }
 
-void browser::load_url(window_id window, const std::string_view &url) {
+void browser::load_url(const std::string &session,
+                       const std::string_view &url) {
 
   html_forms_server_event ev;
   ev.type = HTML_FORMS_SERVER_EVENT_OPEN_URL;
-  ev.data.open_url.window_id = window;
+  copy_session_id(session, ev.data.open_url.session_id);
   ::strlcpy(ev.data.open_url.url, url.data(), sizeof(ev.data.open_url.url));
   notify_event(ev);
 }

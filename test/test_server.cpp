@@ -41,15 +41,15 @@ private:
       cJSON *obj = cJSON_CreateObject();
       cJSON_AddStringToObject(obj, "type", "open");
       cJSON_AddStringToObject(obj, "url", open.url);
-      cJSON_AddNumberToObject(obj, "windowId", open.window_id);
+      cJSON_AddStringToObject(obj, "sessionId", open.session_id);
       send(obj);
       cJSON_free(obj);
     } else if (ev.type == HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW) {
       const auto &close = ev.data.close_win;
-      std::cout << "close window " << close.window_id << std::endl;
+      std::cout << "close window " << close.session_id << std::endl;
       cJSON *obj = cJSON_CreateObject();
       cJSON_AddStringToObject(obj, "type", "close");
-      cJSON_AddNumberToObject(obj, "windowId", close.window_id);
+      cJSON_AddStringToObject(obj, "sessionId", close.session_id);
       send(obj);
       cJSON_free(obj);
     } else if (ev.type == HTML_FORMS_SERVER_EVENT_SHOW_ERROR) {
@@ -57,7 +57,7 @@ private:
       std::cout << "show error " << err.msg << std::endl;
       cJSON *obj = cJSON_CreateObject();
       cJSON_AddStringToObject(obj, "type", "error");
-      cJSON_AddNumberToObject(obj, "windowId", err.window_id);
+      cJSON_AddStringToObject(obj, "sessionId", err.session_id);
       cJSON_AddStringToObject(obj, "msg", err.msg);
       send(obj);
       cJSON_free(obj);
@@ -108,10 +108,10 @@ public:
 
         if (strcmp(type, "close") == 0) {
 
-          cJSON *windowProp = cJSON_GetObjectItem(obj, "windowId");
-          int window_id = (int)cJSON_GetNumberValue(windowProp);
-          std::cout << "Requesting to close window " << window_id << std::endl;
-          html_forms_server_close_window(html_, window_id);
+          cJSON *sessionProp = cJSON_GetObjectItem(obj, "sessionId");
+          std::string session_id = cJSON_GetStringValue(sessionProp);
+          std::cout << "Requesting to close window " << session_id << std::endl;
+          html_forms_server_close_window(html_, session_id.c_str());
         } else {
           std::cerr << "Unknown browser message type: " << type << std::endl;
           ok = false;

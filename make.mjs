@@ -244,6 +244,7 @@ function makeServer(make, htmlLib) {
 			'server/src/my-beast.cpp',
 			'server/src/browser.cpp',
 			'server/src/parse_target.cpp',
+			'server/src/evt_util.cpp',
 			session_lock,
 			formsJsCpp,
 			loadingHtmlCpp,

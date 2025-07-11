@@ -18,6 +18,9 @@ extern "C" {
 #define HTML_API
 #endif
 
+/** Hold a UUID and a null terminator */
+#define HTML_FORMS_SERVER_SESSION_ID_SIZE 37
+
 struct html_forms_server_;
 typedef struct html_forms_server_ html_forms_server;
 
@@ -29,17 +32,17 @@ typedef struct {
   int type;
   union {
     struct {
-      int window_id;
+      char session_id[HTML_FORMS_SERVER_SESSION_ID_SIZE];
       char msg[HTML_MSG_SIZE];
     } show_err;
 
     struct {
-      int window_id;
+      char session_id[HTML_FORMS_SERVER_SESSION_ID_SIZE];
       char url[HTML_URL_SIZE];
     } open_url;
 
     struct {
-      int window_id;
+      char session_id[HTML_FORMS_SERVER_SESSION_ID_SIZE];
     } close_win;
   } data;
 } html_forms_server_event;
@@ -68,23 +71,8 @@ int HTML_API html_forms_server_stop(html_forms_server *server);
 int HTML_API html_forms_server_start_session(html_forms_server *server,
                                              const char *session_id, int fd);
 
-/**
- * Query the session ID associated with a browser window
- * @param[in] server The server object
- * @param[in] window_id The window whose session is being looked up
- * @param[out] session_id_buf A buffer pointing to memory to hold the null
- * terminated session ID
- * @param[in] The size of session_id_buf in chars. This should be at least 37 to
- * hold a UUID
- * @return 1 on success, 0 on failure
- */
-int HTML_API html_forms_server_session_for_window(html_forms_server *server,
-                                                  int window_id,
-                                                  char *session_id_buf,
-                                                  size_t session_id_bufsize);
-
 int HTML_API html_forms_server_close_window(html_forms_server *server,
-                                            int window_id);
+                                            const char *session_id);
 
 #ifdef __cplusplus
 }
