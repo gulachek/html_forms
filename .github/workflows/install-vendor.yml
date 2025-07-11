@@ -13,10 +13,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest]
     outputs:
       cache-key-macOS: ${{ steps.gen-key.outputs.cache-key-macOS }}
-      cache-key-Linux: ${{ steps.gen-key.outputs.cache-key-Linux }}
+      #cache-key-Linux: ${{ steps.gen-key.outputs.cache-key-Linux }}
     steps:
       - uses: actions/checkout@v4
       - name: Generate Cache Key
@@ -47,6 +47,6 @@ jobs:
         id: combine-keys
         run: |
           macos="${{ needs.install-vendor.outputs.cache-key-macOS }}"
-          linux="${{ needs.install-vendor.outputs.cache-key-Linux }}"
+          #linux="${{ needs.install-vendor.outputs.cache-key-Linux }}"
           keys="{\"macOS\":\"$macos\",\"Linux\":\"$linux\"}"
           echo "cache-keys=$keys" >> "$GITHUB_OUTPUT"
