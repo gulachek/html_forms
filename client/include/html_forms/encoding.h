@@ -42,6 +42,11 @@ extern "C" {
 #define HTML_MIME_SIZE 256
 
 /**
+ * Size of a null-terminated serialized UUID for communication
+ */
+#define HTML_UUID_SIZE 37
+
+/**
  * Max size of HTML form submissions for communication
  * @remark This is referring to the POST body size
  */
@@ -57,11 +62,12 @@ enum html_in_msg_type {
 
 /** Output message types */
 enum html_out_msg_type {
-  HTML_OMSG_UPLOAD = 0,   /**< Upload resources */
-  HTML_OMSG_NAVIGATE = 1, /**< Navigate to a relative URL */
-  HTML_OMSG_APP_MSG = 2,  /**< Application-defined message */
-  HTML_OMSG_MIME_MAP = 3, /**< Map file extensions to MIME types */
-  HTML_OMSG_CLOSE = 4,    /**< Close the connection */
+  HTML_OMSG_UPLOAD = 0,             /**< Upload resources */
+  HTML_OMSG_NAVIGATE = 1,           /**< Navigate to a relative URL */
+  HTML_OMSG_APP_MSG = 2,            /**< Application-defined message */
+  HTML_OMSG_MIME_MAP = 3,           /**< Map file extensions to MIME types */
+  HTML_OMSG_CLOSE = 4,              /**< Close the connection */
+  HTML_OMSG_ACCEPT_IO_TRANSFER = 5, /**< Accept an I/O transfer request */
 };
 
 /** Resource types to be uploaded */
@@ -89,6 +95,11 @@ struct html_omsg_app_msg {
   size_t content_length; /**< @brief Size of message in bytes */
 };
 
+/** Accept an I/O transfer request */
+struct html_omsg_accept_io_transfer {
+  char token[HTML_UUID_SIZE]; /**< Token associated with I/O transfer request */
+};
+
 /**
  * Output message for use by server implementations
  */
@@ -101,6 +112,8 @@ struct html_out_msg {
     struct html_omsg_navigate navigate; /**< @brief The navigate payload */
     struct html_omsg_app_msg
         app_msg; /**< @brief The application-defined message payload */
+    struct html_omsg_accept_io_transfer accept_io_transfer; /**< @brief The
+                                            accept I/O transfer payload */
 
     /**
      * The message as a mime map
@@ -236,6 +249,17 @@ int HTML_API html_encode_omsg_app_msg(void *data, size_t size,
  * @return The size in bytes of the encoded message, -1 on failure
  */
 int HTML_API html_encode_omsg_close(void *data, size_t size);
+
+/**
+ * Encode an accept I/O transfer message
+ * @param[in] data Points to a buffer of size @a size bytes
+ * @param[in] size The size of the buffer pointed to by @a data
+ * @param[in] token The I/O transfer token as a null terminated UUID string
+ * message to be sent
+ * @return The size in bytes of the encoded message, -1 on failure
+ */
+int HTML_API html_encode_omsg_accept_io_transfer(void *data, size_t size,
+                                                 const char *token);
 
 /**
  * Encode a form submission. This is useful for server implementations.

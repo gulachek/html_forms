@@ -27,7 +27,10 @@ int main() {
 
   char transfer_token[37];
   if (tty_transfer_request_io_token(transfer_token, 37) == TTY_TRANSFER_OK) {
-    printf("Received token!!! TODO: implement follow up\n");
+    if (!html_accept_io_transfer(con, transfer_token)) {
+      fprintf(stderr, "Failed to accept I/O transfer: %s\n", html_errmsg(con));
+      return 1;
+    }
   } else {
     fprintf(stderr, "Failed to receive tty I/O transfer token\n");
     return 1;

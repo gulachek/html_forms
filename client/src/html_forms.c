@@ -523,6 +523,26 @@ int html_encode_omsg_close(void *data, size_t size) {
   return strlen(data);
 }
 
+int html_encode_omsg_accept_io_transfer(void *data, size_t size,
+                                        const char *token) {
+  cJSON *obj = cJSON_CreateObject();
+  if (!obj)
+    return -1;
+
+  int ok = 1;
+  if (!cJSON_AddNumberToObject(obj, "type", HTML_OMSG_ACCEPT_IO_TRANSFER))
+    ok = 0;
+
+  if (!cJSON_AddStringToObject(obj, "token", token))
+    ok = 0;
+
+  if (!cJSON_PrintPreallocated(obj, data, size, 0))
+    ok = 0;
+
+  cJSON_Delete(obj);
+  return ok ? strlen(data) : -1;
+}
+
 int html_navigate(html_connection *con, const char *url) {
   if (!con)
     return 0;
@@ -537,6 +557,27 @@ int html_navigate(html_connection *con, const char *url) {
   int ec = msgstream_fd_send(con->fd, buf, sizeof(buf), n);
   if (ec) {
     printf_err(con, "Failed to send navigate message: %s",
+               msgstream_errstr(ec));
+    return 0;
+  }
+
+  return 1;
+}
+
+int html_accept_io_transfer(html_connection *con, const char *io_token) {
+  if (!con)
+    return 0;
+
+  char buf[HTML_MSG_SIZE];
+  int n = html_encode_omsg_accept_io_transfer(buf, sizeof(buf), io_token);
+  if (n < 0) {
+    printf_err(con, "Failed to serialize accept I/O transfer message (likely "
+                    "memory issue)");
+    return 0;
+  }
+  int ec = msgstream_fd_send(con->fd, buf, sizeof(buf), n);
+  if (ec) {
+    printf_err(con, "Failed to send accept I/O transfer message: %s",
                msgstream_errstr(ec));
     return 0;
   }
@@ -680,6 +721,15 @@ static int html_decode_app_msg(cJSON *obj, struct html_omsg_app_msg *msg) {
   return 1;
 }
 
+static int
+html_decode_accept_io_transfer(cJSON *obj,
+                               struct html_omsg_accept_io_transfer *msg) {
+  if (!copy_string(obj, "token", msg->token, sizeof(msg->token)))
+    return 0;
+
+  return 1;
+}
+
 static int html_decode_mime_msg(cJSON *obj, html_mime_map *mimes) {
   if (!mimes)
     return 0;
@@ -746,6 +796,9 @@ int html_decode_out_msg(const void *data, size_t size,
   } else if (type_val == HTML_OMSG_CLOSE) {
     msg->type = HTML_OMSG_CLOSE;
     ret = 1;
+  } else if (type_val == HTML_OMSG_ACCEPT_IO_TRANSFER) {
+    msg->type = HTML_OMSG_ACCEPT_IO_TRANSFER;
+    ret = html_decode_accept_io_transfer(obj, &msg->msg.accept_io_transfer);
   } else {
     goto fail;
   }
@@ -984,7 +1037,8 @@ static int html_read_form_data(html_connection *con, void *data, size_t size,
 
   if (form->content_length + 1 > size) {
     printf_err(con,
-               "Form buffer of size %lu is too small for received form of size "
+               "Form buffer of size %lu is too small for received "
+               "form of size "
                "%lu (plus null terminator)",
                size, form->content_length);
     return 0;

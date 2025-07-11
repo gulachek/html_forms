@@ -333,6 +333,20 @@ const char *HTML_API html_form_value_at(const html_form *form, size_t i);
 const char *HTML_API html_form_value_of(const html_form *form,
                                         const char *field_name);
 
+/**
+ * Instruct the browser to accept a previously requested I/O transfer, such as
+ * from a TTY
+ * @param[in] con The connection
+ * @param[in] io_token The token from a previously requested I/O transfer.
+ * Null-terminated
+ * @returns 1 on success, 0 on failure
+ * @remark The behavior of this is implementation defined. The intent is to
+ * allow, for example, an application to show a web page in place of a tty
+ * interface for a seamless user experience.
+ */
+int HTML_API html_accept_io_transfer(html_connection *con,
+                                     const char *io_token);
+
 #ifdef __cplusplus
 }
 #endif

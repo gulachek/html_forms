@@ -44,12 +44,18 @@ typedef struct {
     struct {
       char session_id[HTML_FORMS_SERVER_SESSION_ID_SIZE];
     } close_win;
+
+    struct {
+      char session_id[HTML_FORMS_SERVER_SESSION_ID_SIZE];
+      char token[HTML_UUID_SIZE];
+    } accept_io_transfer;
   } data;
 } html_forms_server_event;
 
 #define HTML_FORMS_SERVER_EVENT_SHOW_ERROR 1
 #define HTML_FORMS_SERVER_EVENT_OPEN_URL 2
 #define HTML_FORMS_SERVER_EVENT_CLOSE_WINDOW 3
+#define HTML_FORMS_SERVER_EVENT_ACCEPT_IO_TRANSFER 4
 
 typedef void html_forms_server_event_callback(const html_forms_server_event *ev,
                                               void *ctx);

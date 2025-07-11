@@ -91,6 +91,8 @@ public:
 };
 
 class server {
+  short port_ = 9876;
+
   fs::path scratch_;
   fs::path catui_address_;
   int catui_server_;
@@ -144,7 +146,7 @@ public:
     fs::create_directories(session_dir_);
 
     log("initializing html server");
-    html_server_ = html_forms_server_init(9876, session_dir_.c_str());
+    html_server_ = html_forms_server_init(port_, session_dir_.c_str());
     assert(html_server_);
 
     int ret =
@@ -209,6 +211,8 @@ public:
     return p;
   }
 
+  short port() const { return port_; }
+
   void pop_event(html_forms_server_event &evt) {
     log("waiting for server event");
     std::unique_lock lck{evt_mtx_};
@@ -232,11 +236,13 @@ class client {
   html_connection *con_ = nullptr;
   bool transferred_ = false;
   std::string session_id_;
+  short server_port_ = 0;
 
   client() = default;
 
 public:
   client(server &s) {
+    server_port_ = s.port();
     log("starting server's accept_client");
     auto accepted = s.accept_client();
     log("calling html_connect");
@@ -261,9 +267,15 @@ public:
 
   std::string session_id() const { return session_id_; }
 
-  void navigate(const char *url) {
-    log("navigating to " + std::string{url});
-    int rc = html_navigate(con_, url);
+  void navigate(const std::string &url) {
+    log("navigating to " + url);
+    int rc = html_navigate(con_, url.c_str());
+    ASSERT_TRUE(rc);
+  }
+
+  void accept_io_transfer(const std::string &token) {
+    log("accepting I/O transfer for token " + token);
+    int rc = html_accept_io_transfer(con_, token.c_str());
     ASSERT_TRUE(rc);
   }
 
@@ -286,6 +298,12 @@ public:
     assert(ret);
     return other;
   }
+
+  std::string expected_navigation_url(const std::string &path) const {
+    std::ostringstream os;
+    os << "http://localhost:" << server_port_ << '/' << session_id_ << path;
+    return os.str();
+  }
 };
 
 TEST(HtmlForms, NavigateTriggersServerEvent) {
@@ -293,21 +311,27 @@ TEST(HtmlForms, NavigateTriggersServerEvent) {
   client c{s};
   html_forms_server_event evt;
 
-  c.navigate("/index.html");
+  std::string url = "/index.html";
+  c.navigate(url);
+
   s.pop_event(evt);
   EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
+  EXPECT_EQ(c.expected_navigation_url(url), std::string{evt.data.open_url.url});
+  EXPECT_EQ(c.session_id(), std::string{evt.data.open_url.session_id});
 }
 
-TEST(HtmlForms, NavigatedWindowIsAssociatedWithClientSession) {
+TEST(HtmlForms, AcceptIOTransferTriggersServerEvent) {
   server s;
   client c{s};
   html_forms_server_event evt;
 
-  c.navigate("/index.html");
+  std::string token = "11111111-2222-3333-4444-555555555555";
+  c.accept_io_transfer(token);
   s.pop_event(evt);
-  EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_OPEN_URL);
-
-  EXPECT_EQ(c.session_id(), std::string{evt.data.open_url.session_id});
+  EXPECT_EQ(evt.type, HTML_FORMS_SERVER_EVENT_ACCEPT_IO_TRANSFER);
+  EXPECT_EQ(token, std::string{evt.data.accept_io_transfer.token});
+  EXPECT_EQ(c.session_id(),
+            std::string{evt.data.accept_io_transfer.session_id});
 }
 
 TEST(HtmlForms, CanNavigateATransferredConnection) {

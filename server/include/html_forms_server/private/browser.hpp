@@ -32,6 +32,9 @@ public:
 
   void load_url(const std::string &session, const std::string_view &url);
 
+  void accept_io_transfer(const std::string &session,
+                          const std::string_view &token);
+
   void set_event_callback(html_forms_server_event_callback *cb, void *ctx);
 
   void request_close(const std::string &session);

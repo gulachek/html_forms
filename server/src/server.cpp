@@ -224,6 +224,9 @@ private:
     case HTML_OMSG_CLOSE:
       do_close();
       break;
+    case HTML_OMSG_ACCEPT_IO_TRANSFER:
+      do_accept_io_transfer(msg.msg.accept_io_transfer);
+      break;
     default:
       log() << "Invalid message type: " << msg.type << std::endl;
       break;
@@ -699,6 +702,12 @@ private:
     log() << "Opening " << os.str() << std::endl;
 
     browser_.load_url(session_id_, os.str());
+    do_recv();
+  }
+
+  void do_accept_io_transfer(const html_omsg_accept_io_transfer &msg) {
+    log() << "Accepting I/O transfer" << std::endl;
+    browser_.accept_io_transfer(session_id_, msg.token);
     do_recv();
   }
 

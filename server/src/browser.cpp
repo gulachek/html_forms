@@ -60,6 +60,16 @@ void browser::load_url(const std::string &session,
   notify_event(ev);
 }
 
+void browser::accept_io_transfer(const std::string &session,
+                                 const std::string_view &token) {
+  html_forms_server_event ev;
+  ev.type = HTML_FORMS_SERVER_EVENT_ACCEPT_IO_TRANSFER;
+  copy_session_id(session, ev.data.accept_io_transfer.session_id);
+  ::strlcpy(ev.data.accept_io_transfer.token, token.data(),
+            sizeof(ev.data.accept_io_transfer.token));
+  notify_event(ev);
+}
+
 browser::window_watcher::~window_watcher() {}
 
 void browser::set_event_callback(html_forms_server_event_callback *cb,
