@@ -125,7 +125,12 @@ public:
 
     if (fs::exists(scratch_)) {
       log("removing " + scratch_.string());
-      fs::remove_all(scratch_);
+      std::error_code ec;
+
+      if (fs::remove_all(scratch_, ec) == -1) {
+        std::cerr << "Warning: Error deleting '" << scratch_
+                  << "': " << ec.message() << std::endl;
+      }
     }
 
     log("creating " + scratch_.string());
